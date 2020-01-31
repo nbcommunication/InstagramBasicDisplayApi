@@ -1,0 +1,444 @@
+<?php
+
+/**
+ * Instagram Basic Display API
+ *
+ * #pw-var $instagram
+ * #pw-summary Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.
+ * #pw-body =
+ * More information here: https://developers.facebook.com/docs/instagram-basic-display-api/
+ * #pw-body
+ *
+ * @copyright 2020 NB Communication Ltd
+ * @license Mozilla Public License v2.0 http://mozilla.org/MPL/2.0/
+ *
+ * @todo Error handling
+ * @todo Token renewal
+ *
+ */
+
+class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableModule {
+
+	/**
+	 * getModuleInfo is a module required by all modules to tell ProcessWire about them
+	 *
+	 * @return array
+	 *
+	 */
+	public static function getModuleInfo() {
+
+		return [
+			"title" => "Instagram Basic Display API",
+			"version" => 001,
+			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
+			"author" => "chriswthomson",
+			"href" => "https://github.com/chriswthomson/InstagramBasicDisplayApi",
+			"autoload" => true,
+			"singular" => true,
+			"icon" => "instagram",
+		];
+	}
+
+	/**
+	 * For getting Instagram User Access Tokens
+	 *
+	 * @var string
+	 *
+	 */
+	const urlAccess = "https://api.instagram.com/";
+
+	/**
+	 * For getting Instagram User Access Tokens
+	 *
+	 * @var string
+	 *
+	 */
+	const urlGraph = "https://graph.instagram.com/";
+
+	/**
+	 * The User Media Scope
+	 *
+	 * @var string
+	 *
+	 */
+	const scopeMedia = "user_media";
+
+	/**
+	 * The User Profile Scope
+	 *
+	 * @var string
+	 *
+	 */
+	const scopeProfile = "user_profile";
+
+	/**
+	 * Cache time
+	 *
+	 * @var int
+	 * @todo make configurable
+	 *
+	 */
+	protected $cacheTime = 3600;
+
+	/**
+	 * Initialize the module
+	 *
+	 */
+	public function init() {
+		// Intercept and process a redirect response
+		$this->addHookBefore("ProcessPageView::pageNotFound", $this, "processResponse");
+	}
+
+	/**
+	 * Get the Authorization Code URI
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-authorize
+	 *
+	 * @return string
+	 *
+	 */
+	public function getAuthorizationCodeUri() {
+		return self::urlAccess . "oauth/authorize?" . http_build_query([
+			"client_id" => $this->clientId,
+			"redirect_uri" => $this->getRedirectUri(),
+			"scope" => self::scopeProfile . ($this->userMedia ? "," . self::scopeMedia : ""),
+			"response_type" => "code",
+			"state" => $this->getState(),
+		]);
+	}
+
+	/**
+	 * Get the Redirect URI
+	 *
+	 * @param bool $httpUrl
+	 * @return string
+	 *
+	 */
+	public function getRedirectUri($httpUrl = true) {
+		return $this->wire("pages")->get(1)->get($httpUrl ? "httpUrl" : "url") . $this->className;
+	}
+
+	/**
+	 * Get a list of Media on the User.
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/guides/getting-profiles-and-media
+	 *
+	 * @param string|int $username
+	 * @return array|false
+	 * @todo Make fields configurable
+	 *
+	 */
+	public function getUserMedia($username) {
+		$result = $this->apiRequest(self::urlGraph . "me/media", [
+			"fields" => "caption,id,media_type,media_url,permalink,thumbnail_url,timestamp,username",
+			"access_token" => $this->getAccessToken($username),
+		]);
+		if(is_array($result)) {
+			//$this->log(json_encode($result)); @todo check for errors
+		} else {
+			//$this->log($this->_("Error")); @todo
+		}
+		return $result;
+	}
+
+	/**
+	 * Alias of getUserMedia
+	 *
+	 * @param string $username
+	 * @return array|false=
+	 *
+	 */
+	public function getRecentMedia($username = null) {
+		return $this->getUserMedia($username);
+	}
+
+	/**
+	 * Get an authenticated user's profile information
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/user
+	 *
+	 * @param string|int $username
+	 * @param string $accessToken
+	 * @return array|false
+	 * @todo Make fields configurable
+	 *
+	 */
+	public function getUserProfile($username = null, $accessToken = null) {
+		$result = $this->apiRequest(self::urlGraph . $this->getUserId($username), [
+			"fields" => "account_type,id,media_count,username",
+			"access_token" => (isset($accessToken) ? $accessToken : $this->getAccessToken($username)),
+		]);
+		if(is_array($result)) {
+			//$this->log(json_encode($result)); @todo check for errors
+		} else {
+			//$this->log($this->_("Error")); @todo
+		}
+		return $result;
+	}
+
+	/**
+	 * Process a response
+	 *
+	 * #pw-hooker
+	 *
+	 * @param HookEvent $event
+	 * @todo document process
+	 *
+	 */
+	public function processResponse(HookEvent $event) {
+
+		if(trim($event->arguments(1), "/") == $this->className) {
+
+			$input = $event->wire("input");
+
+			if($input->get->pageName("error")) {
+				//$this->log(json_encode($input->get)); @todo
+				// error_reason error_description
+			} else {
+				$data = [];
+				$code = $input->get->text("code");
+				$state = $input->get->text("state");
+				if($code) {
+					$cacheTime = $this->cacheTime;
+					$this->cacheTime = 0;
+					if($state == $this->getState()) {
+						$oAuth = $this->requestOAuthAccessToken($code);
+						if($oAuth) {
+							$data = $oAuth;
+							$access = $this->requestAccessToken($oAuth["access_token"]);
+							if($access) {
+								$data = array_merge($data, $access);
+								$profile = $this->getUserProfile($oAuth["user_id"], $oAuth["access_token"]);
+								$username = $profile && isset($profile["username"]) ? $profile["username"] : false;
+								if($username) {
+									if($this->saveAccessData($username, $data)) {
+										$this->cacheTime = $cacheTime;
+										$session = $event->wire("session");
+										$session->message(sprintf($this->_("%2 successfully authenticated."), $username));
+										$session->redirect($event->wire("modules")->getModuleEditUrl($this));
+									}
+								}
+							}
+						}
+					} else {
+						//$this->log($this->_("State error")); @todo
+					}
+				} else {
+					//$this->log($this->_("Unknown error?")); @todo
+				}
+			}
+		}
+	}
+
+	/**
+	 * API Request
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $url
+	 * @param array $data
+	 * @return array|false
+	 * @todo make cache time
+	 *
+	 */
+	protected function apiRequest($url, array $data) {
+		$http = $this->wire(new WireHttp());
+		if($this->cacheTime) {
+			$cacheName = $url . (isset($data["access_token"]) ?
+				"/" . $data["access_token"] :
+				"?" . str_replace(",", "-", http_build_query($data))
+			);
+			return $this->wire("cache")->getFor(
+				$this,
+				$cacheName,
+				function() use ($http, $url, $data) {
+					$this->log("Request made: $url");
+					return $http->getJSON($url, true, $data);
+				},
+				$this->cacheTime
+			);
+		} else {
+			return $http->getJSON($url, true, $data);
+		}
+	}
+
+	/**
+	 * Get access data
+	 *
+	 * #pw-internal
+	 *
+	 * @param string|int $username
+	 * @return array
+	 *
+	 */
+	protected function getAccessData($username = null) {
+		$data = json_decode($this->accessData, 1);
+		if(isset($username) && empty($username)) {
+			foreach($data as $key => $value) {
+				$username = $key;
+				break;
+			}
+		}
+		return isset($username) ? (isset($data[$username]) ? $data[$username] : []) : $data;
+	}
+
+	/**
+	 * Get the user's access token
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $username
+	 * @return string
+	 *
+	 */
+	protected function getAccessToken($username = null) {
+		if(is_null($username)) $username = "";
+		$data = $this->getAccessData($username);
+		return isset($data["access_token"]) ? $data["access_token"] : "";
+	}
+
+	/**
+	 * Return an optional value indicating a server-specific state.
+	 *
+	 * #pw-internal
+	 *
+	 * @return string
+	 *
+	 */
+	protected function getState() {
+		$n = strlen((string) $this->wire("config")->installed);
+		return substr(base64_encode($this->wire("config")->userAuthSalt), round($n / 2), $n);
+	}
+
+	/**
+	 * Get the user id
+	 *
+	 * #pw-internal
+	 *
+	 * @param int|string $username
+	 * @return int
+	 *
+	 */
+	protected function getUserId($username) {
+		if(is_int($username)) return $username;
+		$data = $this->getAccessData($username);
+		return isset($data["user_id"]) ? $data["user_id"] : 0;
+	}
+
+	/**
+	 * Exchange a short-lived Instagram User Access Token for long-lived Instagram User Access Token.
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/access_token
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $oAuthAccessToken The valid (unexpired) short-lived Instagram User Access Token that you want to exchange for a long-lived token.
+	 * @return array|false
+	 *
+	 */
+	protected function requestAccessToken($oAuthAccessToken) {
+		// Perform the API request
+		$request = $this->apiRequest(self::urlGraph . "access_token", [
+			"grant_type" => "ig_exchange_token",
+			"client_secret" => $this->clientSecret,
+			"access_token" => $oAuthAccessToken,
+		]);
+		// If the request is successful, save the data
+		// If not, log the error/response
+		if($request) {
+			$data = $request;
+			if(isset($data["access_token"]) && isset($data["token_type"]) && isset($data["expires_in"])) {
+				$data["expires_in"] = time() + $data["expires_in"];
+				return $data;
+			} else {
+				//$this->log($request); @todo
+			}
+		} else {
+			//$this->log($this->_("Error")); @todo
+		}
+		return false;
+	}
+
+	/**
+	 * Exchange an Authorization Code for a short-lived Instagram User Access Token.
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-access-token
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $code The Authorization Code you want to exchange for an Instagram User Access Token.
+	 * @return array|false
+	 *
+	 */
+	protected function requestOAuthAccessToken($code) {
+		// Perform the API request
+		$request = $this->wire(new WireHttp())->post(self::urlAccess . "oauth/access_token", [
+			"client_id" => $this->clientId,
+			"client_secret" => $this->clientSecret,
+			"grant_type" => "authorization_code",
+			"redirect_uri" => $this->getRedirectUri(),
+			"code" => $code,
+		]);
+		// If the request is successful, save the data and return the short-lived access token
+		// If not, log the error/response
+		if($request) {
+			$data = json_decode($request, 1);
+			if(isset($data["user_id"]) && isset($data["access_token"])) {
+				$data["oauth_access_token"] = $data["access_token"];
+				return $data;
+			} else {
+				/*
+				{
+				"error_type": "OAuthException",
+				"code": 400,
+				"error_message": "Matching code was not found or was already used"
+				} @todo
+				*/
+				//$this->log($request); @todo
+			}
+		} else {
+			//$this->log($this->_("Error")); @todo
+		}
+		return false;
+	}
+
+	/**
+	 * Save access data
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $username
+	 * @param array $data
+	 * @return bool
+	 *
+	 */
+	protected function saveAccessData($username, $data = []) {
+
+		/*$modules = $this->wire("modules");
+
+		if(is_array($id)) {
+			$data = $id;
+			$id = $data["user_id"];
+		}*/
+
+		$tokens = $this->getAccessData();
+		/*if(is_int($data)) {
+			$userId = $data;
+			if(isset($tokens[$userId])) {
+				$data = $tokens[$userId];
+				unset($tokens[$userId]);
+			}
+		} else if(!is_array($data)) {
+			$data = [$data];
+		}
+
+		$this->log("T: " . json_encode($tokens));*/
+		if(isset($tokens[$username])) {
+			$data = array_merge($tokens[$username], $data);
+		}
+
+		$tokens[$username] = $data;
+
+		return $this->wire("modules")->saveConfig($this, "accessData", json_encode($tokens));
+	}
+}
