@@ -26,7 +26,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 020,
+			"version" => 030,
 			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
@@ -130,13 +130,11 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @param int
 	 * @return WireArray|array
 	 * @see InstagramBasicDisplayApi::getMedia()
-	 * @todo
 	 *
 	 */
-	public function getAlbums($username = null, $count = 0) {
+	public function getCarouselAlbums($username = null, $count = 0) {
 		if(!$count) $count = $this->imageCount;
-		$response = $this->getMediaByType(self::mediaTypes["carouselAlbum"], $username, $count);
-		return $response;
+		return $this->getMediaByType(self::mediaTypes["carouselAlbum"], $username, $count);
 	}
 
 	/**
@@ -226,7 +224,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			}
 		}
 
-		$response = $this->apiRequest("me/media", [
+		$request = [
 			"fields" => implode(",", [
 				"caption", // The Media's caption text. Not returnable for Media in albums.
 				"id", // The Media's ID.
@@ -238,7 +236,8 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 				"username", // The Media owner's username.
 			]),
 			"access_token" => $this->getAccessToken($username),
-		], $options["useCache"]);
+		];
+		$response = $this->apiRequest("me/media", $request, $options["useCache"]);
 
 		$data = $options["asArray"] ? [] : $this->wire(new WireArray());
 		if(is_array($response)) {
@@ -269,44 +268,31 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 				$count = $this->count && $this->count <= $itemCount ? $this->count : $itemCount;
 				for($i = 0; $i < $count; $i++) {
+
 					$item = $items[$i];
+
 					if($options["asArray"]) {
+
 						$data[] = $item;
+
 					} else {
 
-						$media = $this->wire(new WireData());
-						foreach([
-							"id" => ["id"],
-							"media_type" => ["type"],
-							"caption" => ["alt", "description", "tags"],
-							"media_url" => ["src", "url"],
-							"timestamp" => ["created", "createdStr"],
-							"permalink" => ["href"],
-							"thumbnail_url" => ["poster"],
-						] as $key => $properties) {
-							if(isset($item[$key])) {
-								foreach($properties as $property) {
-									$value = $item[$key];
-									switch($key) {
-										case "caption":
-											if($property == "tags") {
-												$value = $this->getTags($value);
-											} else {
-												$value = $this->wire("sanitizer")->entities1($value, true);
-											}
-											break;
-										case "timestamp":
-											if($property == "created") {
-												$value = strtotime($value);
-											}
-											break;
-									}
-									$media->set($property, $value);
+						$media = $this->getMediaItem($item);
+
+						// Get Carousel Album children
+						if($this->type == self::mediaTypes["carouselAlbum"]) {
+							$request["fields"] = str_replace("caption,", "", $request["fields"]);
+							$response = $this->apiRequest("$item[id]/children", $request, $options["useCache"]);
+							if($this->hasMedia($response)) {
+								$children = $this->wire(new WireArray());
+								foreach($response["data"] as $child) {
+									$children->add($this->getMediaItem($child));
 								}
+								$media->set("children", $children);
 							}
 						}
 
-						if($media) $data->add($media);
+						$data->add($media);
 					}
 				}
 
@@ -748,6 +734,49 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
+	 * Get media item
+	 *
+	 * @param array $item
+	 * @return WireArray
+	 *
+	 */
+	protected function getMediaItem($item) {
+
+		$media = $this->wire(new WireData());
+		foreach([
+			"id" => ["id"],
+			"media_type" => ["type"],
+			"caption" => ["alt", "description", "tags"],
+			"media_url" => ["src", "url"],
+			"timestamp" => ["created", "createdStr"],
+			"permalink" => ["href"],
+			"thumbnail_url" => ["poster"],
+		] as $key => $properties) {
+			if(isset($item[$key])) {
+				foreach($properties as $property) {
+					$value = $item[$key];
+					switch($key) {
+						case "caption":
+							if($property == "tags") {
+								$value = $this->getTags($value);
+							} else {
+								$value = $this->wire("sanitizer")->entities1($value, true);
+							}
+							break;
+						case "timestamp":
+							if($property == "created") {
+								$value = strtotime($value);
+							}
+							break;
+					}
+					$media->set($property, $value);
+				}
+			}
+		}
+		return $media;
+	}
+
+	/**
 	 * Return an optional value indicating a server-specific state
 	 *
 	 * #pw-internal
@@ -1073,7 +1102,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 					}
 
 				} else {
-					$this->log($this->_("No code returned"), $_GET);
+					$this->logError($this->_("No code returned"), $_GET);
 				}
 
 			} else {
