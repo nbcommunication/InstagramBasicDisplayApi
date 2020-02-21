@@ -5,14 +5,24 @@ This is currently a proof-of-concept in Alpha. Please do not use on production s
 
 ## Methods
 
-**getUserProfile(**_string_ **$username)** - Get an authenticated user's profile information
+**getProfile(**_string_ **$username)** - Get an authorized user's profile information
 - https://developers.facebook.com/docs/instagram-basic-display-api/reference/user
 
-**getUserMedia(**_string|int_ **$username)** - Get a list of Media on the User.
+**getMedia(**_string|int_ **$username)** - Get a list of Media on the User. //$options
 - https://developers.facebook.com/docs/instagram-basic-display-api/guides/getting-profiles-and-media
 
-**getAuthorizationCodeUri()** - Get the Authorization Code URI.
+**getDefaultUser()** - Get the default (first) authorized user
+- Returns the username.
+
+**getRedirectUri()** - Get the Redirect URI.
+- This must be added to your application before authorization.
+
+**getAuthUri()** - Get the Authorization Code URI.
 - https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-authorize
 
-**getRedirectUri(**_bool_ **$httpUrl)** - Get the Redirect URI.
-- If `$httpUrl` is set to `true` the full URI is returned.
+
+## Backwards Compatibility with InstagramFeed
+
+@todo 
+**getRecentMedia(**_string|int_ **$username)** - Get a list of Media on the User.
+- Alias of `getMedia()` to provide backwards compatibility with [Instagram Feed](https://modules.processwire.com/modules/instagram-feed/).
