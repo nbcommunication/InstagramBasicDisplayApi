@@ -26,7 +26,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 010,
+			"version" => 020,
 			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
@@ -61,6 +61,18 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	const urlGraph = "https://graph.instagram.com/";
 
 	/**
+	 * Media Types
+	 *
+	 * @var string
+	 *
+	 */
+	const mediaTypes = [
+		"carouselAlbum" => "CAROUSEL_ALBUM",
+		"image" => "IMAGE",
+		"video" => "VIDEO",
+	];
+
+	/**
 	 * The number of media items to be returned
 	 *
 	 * @var int
@@ -70,13 +82,21 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 	/**
 	 * The number of images to be returned
-	 * 
+	 *
 	 * For providing backwards compatibility with InstagramFeed
 	 *
 	 * @var int
 	 *
 	 */
 	protected $imageCount = 4;
+
+	/**
+	 * The type of media items to be returned
+	 *
+	 * @var type
+	 *
+	 */
+	protected $type = "";
 
 	/**
 	 * Initialize the module
@@ -104,6 +124,22 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
+	 * Get a list of Carousel Albums for a user
+	 *
+	 * @param string $username
+	 * @param int
+	 * @return WireArray|array
+	 * @see InstagramBasicDisplayApi::getMedia()
+	 * @todo
+	 *
+	 */
+	public function getAlbums($username = null, $count = 0) {
+		if(!$count) $count = $this->imageCount;
+		$response = $this->getMediaByType(self::mediaTypes["carouselAlbum"], $username, $count);
+		return $response;
+	}
+
+	/**
 	 * Get the Authorization Code URI
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-authorize
@@ -123,7 +159,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 	/**
 	 * Get the default user
-	 * 
+	 *
 	 * @param $name Should the username be returned? (default=true)
 	 * @return string|array
 	 *
@@ -140,19 +176,20 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
-	 * Get the Redirect URI
+	 * Get a list of Images for a user
 	 *
-	 * @param bool $httpUrl Should the full URI with protocol be returned? (default=true)
-	 * @return string
+	 * @param string $username
+	 * @param int
+	 * @return WireArray|array
+	 * @see InstagramBasicDisplayApi::getMedia()
 	 *
 	 */
-	public function getRedirectUri($httpUrl = true) {
-		return ($httpUrl ? rtrim($this->wire("input")->httpHostUrl(), "/") : "") .
-			$this->wire("config")->urls->admin . $this->className;
+	public function getImages($username = null, $count = 0) {
+		return $this->getMediaByType(self::mediaTypes["image"], $username, $count);
 	}
 
 	/**
-	 * Get a list of Media on the User
+	 * Get a list of Media for a user
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/guides/getting-profiles-and-media
 	 *
@@ -160,14 +197,15 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @param array $options
 	 * - `asArray` (bool): Should the data be returned as an array? (default=false)
 	 * - `count` (int): The number of items to return (default=0).
+	 * - `type` (string): The type of media to return (default="").
 	 * - `useCache` (bool): Should the cache be used? (default=true)
 	 * @return WireArray|array
-	 * @todo handle videos and albums
 	 *
 	 */
 	public function getMedia($username = null, $options = []) {
 
 		// Shortcuts
+		if(is_string($options)) $options = ["type" => $options];
 		if(is_bool($options)) $options = ["asArray" => $options];
 		if(is_int($options)) $options = ["count" => $options];
 
@@ -176,10 +214,17 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			"asArray" => false,
 			"count" => $this->count,
 			"imageCount" => 0,
+			"type" => $this->type,
 			"useCache" => true,
 		], $options);
 
 		if($options["count"]) $this->count = $options["count"];
+		if($options["type"]) {
+			$options["type"] = strtoupper($options["type"]);
+			if(in_array($options["type"], self::mediaTypes)) {
+				$this->type = $options["type"];
+			}
+		}
 
 		$response = $this->apiRequest("me/media", [
 			"fields" => implode(",", [
@@ -198,21 +243,21 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		$data = $options["asArray"] ? [] : $this->wire(new WireArray());
 		if(is_array($response)) {
 
-			if(isset($response["data"])) {
+			if($this->hasMedia($response)) {
 
-				$items = $response["data"];
+				$items = $this->filterMedia($response["data"]);
 				$itemCount = count($items);
 				$totalCount = $options["imageCount"] ?: $options["count"];
 
-				if($totalCount && $totalCount > $itemCount && isset($response["paging"]["next"])) {
+				if(((!$totalCount && !$itemCount) || ($totalCount && $totalCount > $itemCount)) && isset($response["paging"]["next"])) {
 
 					$next = $response["paging"]["next"];
 					do {
 
 						$response = $this->apiRequest($next, [], $options["useCache"]);
 
-						if(is_array($response) && isset($response["data"]) && isset($response["paging"]["next"])) {
-							$items = array_merge($items, $response["data"]);
+						if($this->hasMedia($response) && isset($response["paging"]["next"])) {
+							$items = array_merge($items, $this->filterMedia($response["data"]));
 							$itemCount = count($items);
 							$next = $response["paging"]["next"];
 						} else {
@@ -221,7 +266,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 					} while($itemCount < $this->count);
 				}
-				
+
 				$count = $this->count && $this->count <= $itemCount ? $this->count : $itemCount;
 				for($i = 0; $i < $count; $i++) {
 					$item = $items[$i];
@@ -232,17 +277,16 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 						$media = $this->wire(new WireData());
 						foreach([
 							"id" => ["id"],
-							"type" => ["media_type"],
+							"media_type" => ["type"],
 							"caption" => ["alt", "description", "tags"],
 							"media_url" => ["src", "url"],
 							"timestamp" => ["created", "createdStr"],
-							"href" => ["permalink"],
-							"thumbnail_url" => ["src"], //@todo
+							"permalink" => ["href"],
+							"thumbnail_url" => ["poster"],
 						] as $key => $properties) {
 							if(isset($item[$key])) {
-								
-								$value = $item[$key];
 								foreach($properties as $property) {
+									$value = $item[$key];
 									switch($key) {
 										case "caption":
 											if($property == "tags") {
@@ -252,7 +296,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 											}
 											break;
 										case "timestamp":
-											if($property == "createdStr") {
+											if($property == "created") {
 												$value = strtotime($value);
 											}
 											break;
@@ -272,7 +316,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			}
 
 		} else {
-			
+
 			$this->logError(
 				$this->_("Could not get user media"),
 				$this->getArgs(func_get_args(), ["username", "options"])
@@ -283,7 +327,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
-	 * Get an authenticated user's profile information
+	 * Get a user's profile information
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/user
 	 *
@@ -310,13 +354,13 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 	/**
 	 * Get recent comments - for backwards compatibility with InstagramFeed
-	 * 
-	 * If called, returns a blank array as comments cannot be access by this API.
-	 * 
+	 *
+	 * If called, returns a blank array as comments cannot be accessed by this API.
+	 *
 	 * #pw-group-instagram-feed
 	 *
 	 * @param array $media
-	 * @return array
+	 * @return array An empty array
 	 *
 	 */
 	public function getRecentComments($media = null) {
@@ -326,22 +370,22 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 	/**
 	 * Extension of getMedia() for backwards compatibility with InstagramFeed
-	 * 
+	 *
 	 * #pw-group-instagram-feed
 	 *
 	 * @param string $username
 	 * @param array $options Options to modify behaviour
 	 * - `cacheTime` (int): The number of seconds the response be cached for.
-	 * This is set to `0` by default, and uses the module's cache time. 
+	 * This is set to `0` by default, and uses the module's cache time.
 	 * If this is also 0, then the response is cached for 3600 seconds (1 hour).
-	 * - `getSize` (bool): Should the image width and height be returned? 
+	 * - `getSize` (bool): Should the image width and height be returned?
 	 * This is set to `false` by default as it slows response time.
 	 * @return array
 	 *
 	 */
 	public function getRecentMedia($username = null, $options = []) {
 
-		// Shortcuts 
+		// Shortcuts
 		if(isset($username) && !is_string($username)) {
 			if(is_int($username)) $options = ["cacheTime" => $username];
 			if(is_bool($username)) $options = ["getSize" => $username];
@@ -356,7 +400,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			"cacheTime" => 0,
 			"getSize" => false,
 		], $options);
-		
+
 		$items = $this->wire("cache")->getFor(
 			$this,
 			$this->cacheKey([($username ?: $this->getDefaultUser()), __FUNCTION__]),
@@ -365,6 +409,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 					"asArray" => true,
 					"count" => 0,
 					"imageCount" => $this->imageCount,
+					"type" => self::mediaTypes["image"],
 				]);
 			},
 			($options["cacheTime"] ?: ($this->cacheTime ?: 3600))
@@ -380,76 +425,72 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 				if($i >= $count) break;
 
-				$type = strtolower($item["media_type"]);
-				if($type == "image") {
+				$user = [
+					"id" => null,
+					"full_name" => null,
+					"profile_picture" => null,
+					"username" => $item["username"],
+				];
 
-					$user = [
-						"id" => null,
-						"full_name" => null,
-						"profile_picture" => null,
-						"username" => $item["username"],
-					];
-					
-					$image = [
-						"url" => $item["media_url"],
-						"width" => null,
-						"height" => null,
-					];
+				$image = [
+					"url" => $item["media_url"],
+					"width" => null,
+					"height" => null,
+				];
 
-					if($options["getSize"]) {
-						$size = getimagesize($image["url"]);
-						$image = array_merge($image, [
-							"width" => $size[0],
-							"height" => $size[1]
-						]);
-					}
-
-					$timestamp = strtotime($item["timestamp"]);
-					$caption = $item["caption"];
-
-					$data[] = [
-						"id" => $item["id"],
-						"user" => $user,
-						"images" => [
-							"thumbnail" => $image,
-							"low_resolution" => $image,
-							"standard_resolution" => $image,
-						],
-						"created_time" => $timestamp,
-						"caption" => [
-							"id" => null,
-							"text" => $caption,
-							"created_time" => $timestamp,
-							"from" => $user,
-						],
-						"user_has_liked" => null,
-						"likes" => ["count" => null],
-						"tags" => $this->getTags($caption),
-						"filter" => null,
-						"comments" => ["count" => null],
-						"type" => $type,
-						"link" => $item["permalink"],
-						"location" => [
-							"latitude" => null,
-							"longitude" => null,
-							"name" => null,
-							"id" => null,
-						],
-						"attribution" => null,
-						"users_in_photo" => null,
-					];
-
-					$i++;
+				if($options["getSize"]) {
+					$size = getimagesize($image["url"]);
+					$image = array_merge($image, [
+						"width" => $size[0],
+						"height" => $size[1]
+					]);
 				}
+
+				$timestamp = strtotime($item["timestamp"]);
+				$caption = $item["caption"];
+
+				$data[] = [
+					"id" => $item["id"],
+					"user" => $user,
+					"images" => [
+						"thumbnail" => $image,
+						"low_resolution" => $image,
+						"standard_resolution" => $image,
+					],
+					"created_time" => $timestamp,
+					"caption" => [
+						"id" => null,
+						"text" => $caption,
+						"created_time" => $timestamp,
+						"from" => $user,
+					],
+					"user_has_liked" => null,
+					"likes" => ["count" => null],
+					"tags" => $this->getTags($caption),
+					"filter" => null,
+					"comments" => ["count" => null],
+					"type" => strtolower($item["media_type"]),
+					"link" => $item["permalink"],
+					"location" => [
+						"latitude" => null,
+						"longitude" => null,
+						"name" => null,
+						"id" => null,
+					],
+					"attribution" => null,
+					"users_in_photo" => null,
+				];
+
+				$i++;
 			}
 		}
-		
+
 		return $data;
 	}
 
 	/**
 	 * Extension of getMedia()/getRecentMedia() for backwards compatibility with InstagramFeed
-	 * 
+	 *
 	 * #pw-group-instagram-feed
 	 *
 	 * @param string $tag
@@ -478,8 +519,20 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
+	 * Get the Redirect URI
+	 *
+	 * @param bool $httpUrl Should the full URI with protocol be returned? (default=true)
+	 * @return string
+	 *
+	 */
+	public function getRedirectUri($httpUrl = true) {
+		return ($httpUrl ? rtrim($this->wire("input")->httpHostUrl(), "/") : "") .
+			$this->wire("config")->urls->admin . $this->className;
+	}
+
+	/**
 	 * Get the user's ID from their username
-	 * 
+	 *
 	 * #pw-group-instagram-feed
 	 *
 	 * @param string $username
@@ -492,8 +545,22 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
+	 * Get a list of Videos for a user
+	 *
+	 * @param string $username
+	 * @param int
+	 * @return WireArray|array
+	 * @see InstagramBasicDisplayApi::getMedia()
+	 *
+	 */
+	public function getVideos($username = null, $count = 0) {
+		if(!$count) $count = $this->imageCount;
+		return $this->getMediaByType(self::mediaTypes["video"], $username, $count);
+	}
+
+	/**
 	 * Set the image count
-	 * 
+	 *
 	 * #pw-group-instagram-feed
 	 *
 	 * @param int $imageCount
@@ -501,14 +568,6 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	public function setImageCount($imageCount = 4) {
-		/*$max = 24;
-		if($imageCount >= $max) {
-			$this->logError(
-				sprintf($this->_("A maximum of 24 images can be returned using %s"), "`getRecentMedia()`"),
-				["imageCount" => $imageCount]
-			);
-			$imageCount = $max;
-		}*/
 		$this->imageCount = (int) $imageCount;
 		return $this;
 	}
@@ -590,8 +649,35 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected function cacheKey(array $data) {
+		if($this->type) $data[] = $this->type;
 		if($this->count) $data[] = $this->count;
 		return $this->wire("sanitizer")->text(base64_encode(implode(self::cacheNameDelimiter, $data)));
+	}
+
+	/**
+	 * Filter a media response
+	 *
+	 * #pw-internal
+	 *
+	 * @param array $media
+	 * @return array
+	 *
+	 */
+	protected function filterMedia(array $media) {
+		$items = $media;
+		if($this->type) {
+			$types = [$this->type];
+			if($this->type == self::mediaTypes["image"]) {
+				$types[] = self::mediaTypes["carouselAlbum"];
+			}
+			$items = [];
+			foreach($media as $item) {
+				if(in_array($item["media_type"], $types)) {
+					$items[] = $item;
+				}
+			}
+		}
+		return $items;
 	}
 
 	/**
@@ -641,6 +727,27 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
+	 * Get media items by type
+	 *
+	 * @param string $type
+	 * @param string $username
+	 * @param int
+	 * @return WireArray|array
+	 * @see InstagramBasicDisplayApi::getMedia()
+	 *
+	 */
+	protected function getMediaByType($type, $username = null, $count = 0) {
+		if(is_int($username)) {
+			$count = $username;
+			$username = null;
+		}
+		return $this->getMedia($username, [
+			"count" => ($count ?: $this->count),
+			"type" => $type,
+		]);
+	}
+
+	/**
 	 * Return an optional value indicating a server-specific state
 	 *
 	 * #pw-internal
@@ -671,6 +778,19 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			}
 		}
 		return $tags;
+	}
+
+	/**
+	 * Does the response have media?
+	 *
+	 * #pw-internal
+	 *
+	 * @param array $response
+	 * @return bool
+	 *
+	 */
+	protected function hasMedia($response) {
+		return is_array($response) ? isset($response["data"]) && is_array($response["data"]) && count($response["data"]) : false;
 	}
 
 	/**
@@ -796,7 +916,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * Get the arguments and return as an associative array
 	 *
 	 * #pw-internal
-	 * 
+	 *
 	 * @param array $args
 	 * @param array $keys
 	 * @return array
@@ -814,14 +934,14 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * Obfuscate the client secret
 	 *
 	 * #pw-internal
-	 * 
+	 *
 	 * @param string $secret
 	 * @return string
 	 *
 	 */
 	private function obfuscateSecret($secret) {
-		return substr($secret, 0, 3) . 
-			str_repeat("*", strlen($secret) - 6) . 
+		return substr($secret, 0, 3) .
+			str_repeat("*", strlen($secret) - 6) .
 			substr($secret, -3);
 	}
 
@@ -829,7 +949,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * Process a response from an API request
 	 *
 	 * #pw-internal
-	 * 
+	 *
 	 * @param mixed $response
 	 * @param array $options
 	 * @return array|false
@@ -839,8 +959,8 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		// Shortcuts
 		if(!is_array($options)) {
-			$options = is_bool($options) ? 
-				["check" => $options, "set" => $options] : 
+			$options = is_bool($options) ?
+				["check" => $options, "set" => $options] :
 				["error" => $options];
 		}
 
