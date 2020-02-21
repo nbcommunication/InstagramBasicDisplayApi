@@ -12,9 +12,6 @@
  * @copyright 2020 NB Communication Ltd
  * @license Mozilla Public License v2.0 http://mozilla.org/MPL/2.0/
  *
- * @todo Error handling
- * @todo Token renewal
- *
  */
 
 class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableModule {
@@ -29,15 +26,23 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 001,
+			"version" => 010,
 			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
 			"author" => "chriswthomson",
-			"href" => "https://github.com/chriswthomson/InstagramBasicDisplayApi",
-			"autoload" => true,
+			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
+			"autoload" => "template=admin",
 			"singular" => true,
 			"icon" => "instagram",
 		];
 	}
+
+	/**
+	 * For delimiting the cache name
+	 *
+	 * @var string
+	 *
+	 */
+	const cacheNameDelimiter = "||";
 
 	/**
 	 * For getting Instagram User Access Tokens
@@ -56,37 +61,46 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	const urlGraph = "https://graph.instagram.com/";
 
 	/**
-	 * The User Media Scope
-	 *
-	 * @var string
-	 *
-	 */
-	const scopeMedia = "user_media";
-
-	/**
-	 * The User Profile Scope
-	 *
-	 * @var string
-	 *
-	 */
-	const scopeProfile = "user_profile";
-
-	/**
-	 * Cache time
+	 * The number of media items to be returned
 	 *
 	 * @var int
-	 * @todo make configurable
 	 *
 	 */
-	protected $cacheTime = 3600;
+	protected $count = 0;
+
+	/**
+	 * The number of images to be returned
+	 * 
+	 * For providing backwards compatibility with InstagramFeed
+	 *
+	 * @var int
+	 *
+	 */
+	protected $imageCount = 4;
 
 	/**
 	 * Initialize the module
 	 *
 	 */
 	public function init() {
-		// Intercept and process a redirect response
-		$this->addHookBefore("ProcessPageView::pageNotFound", $this, "processResponse");
+		// Do Nothing
+	}
+
+	/**
+	 * Initialize the module
+	 *
+	 */
+	public function ready() {
+		// Hook before the admin controller
+		if(!$this->wire("config")->ajax) {
+			// No need to hook on AJAX requests
+			$this->wire->addHookBefore("ProcessController::execute", function(HookEvent $event) {
+				// If this is a response from Instagram, process it
+				if($event->wire("input")->urlSegment1 == $this->className) {
+					$this->processResponse();
+				}
+			});
+		}
 	}
 
 	/**
@@ -97,59 +111,175 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @return string
 	 *
 	 */
-	public function getAuthorizationCodeUri() {
+	public function getAuthUri() {
 		return self::urlAccess . "oauth/authorize?" . http_build_query([
 			"client_id" => $this->clientId,
 			"redirect_uri" => $this->getRedirectUri(),
-			"scope" => self::scopeProfile . ($this->userMedia ? "," . self::scopeMedia : ""),
+			"scope" => "user_media,user_profile",
 			"response_type" => "code",
 			"state" => $this->getState(),
 		]);
 	}
 
 	/**
+	 * Get the default user
+	 * 
+	 * @param $name Should the username be returned? (default=true)
+	 * @return string|array
+	 *
+	 */
+	public function getDefaultUser($name = true) {
+		$data = $this->getAccessData();
+		if(function_exists("array_key_first")) {
+			$username = array_key_first($data); // PHP 7.3
+			$data = $data[$username];
+		} else {
+			foreach($data as $username => $data) break;
+		}
+		return $name ? $username : $data;
+	}
+
+	/**
 	 * Get the Redirect URI
 	 *
-	 * @param bool $httpUrl
+	 * @param bool $httpUrl Should the full URI with protocol be returned? (default=true)
 	 * @return string
 	 *
 	 */
 	public function getRedirectUri($httpUrl = true) {
-		return $this->wire("pages")->get(1)->get($httpUrl ? "httpUrl" : "url") . $this->className;
+		return ($httpUrl ? rtrim($this->wire("input")->httpHostUrl(), "/") : "") .
+			$this->wire("config")->urls->admin . $this->className;
 	}
 
 	/**
-	 * Get a list of Media on the User.
+	 * Get a list of Media on the User
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/guides/getting-profiles-and-media
 	 *
 	 * @param string|int $username
-	 * @return array|false
-	 * @todo Make fields configurable
+	 * @param array $options
+	 * - `asArray` (bool): Should the data be returned as an array? (default=false)
+	 * - `count` (int): The number of items to return (default=0).
+	 * - `useCache` (bool): Should the cache be used? (default=true)
+	 * @return WireArray|array
+	 * @todo handle videos and albums
 	 *
 	 */
-	public function getUserMedia($username) {
-		$result = $this->apiRequest(self::urlGraph . "me/media", [
-			"fields" => "caption,id,media_type,media_url,permalink,thumbnail_url,timestamp,username",
-			"access_token" => $this->getAccessToken($username),
-		]);
-		if(is_array($result)) {
-			//$this->log(json_encode($result)); @todo check for errors
-		} else {
-			//$this->log($this->_("Error")); @todo
-		}
-		return $result;
-	}
+	public function getMedia($username = null, $options = []) {
 
-	/**
-	 * Alias of getUserMedia
-	 *
-	 * @param string $username
-	 * @return array|false=
-	 *
-	 */
-	public function getRecentMedia($username = null) {
-		return $this->getUserMedia($username);
+		// Shortcuts
+		if(is_bool($options)) $options = ["asArray" => $options];
+		if(is_int($options)) $options = ["count" => $options];
+
+		// Set default options
+		$options = array_merge([
+			"asArray" => false,
+			"count" => $this->count,
+			"imageCount" => 0,
+			"useCache" => true,
+		], $options);
+
+		if($options["count"]) $this->count = $options["count"];
+
+		$response = $this->apiRequest("me/media", [
+			"fields" => implode(",", [
+				"caption", // The Media's caption text. Not returnable for Media in albums.
+				"id", // The Media's ID.
+				"media_type", // The Media's type. Can be IMAGE, VIDEO, or CAROUSEL_ALBUM.
+				"media_url", // The Media's URL.
+				"permalink", // The Media's permanent URL.
+				"thumbnail_url", // The Media's thumbnail image URL. Only available on VIDEO Media.
+				"timestamp", // The Media's publish date in ISO 8601 format.
+				"username", // The Media owner's username.
+			]),
+			"access_token" => $this->getAccessToken($username),
+		], $options["useCache"]);
+
+		$data = $options["asArray"] ? [] : $this->wire(new WireArray());
+		if(is_array($response)) {
+
+			if(isset($response["data"])) {
+
+				$items = $response["data"];
+				$itemCount = count($items);
+				$totalCount = $options["imageCount"] ?: $options["count"];
+
+				if($totalCount && $totalCount > $itemCount && isset($response["paging"]["next"])) {
+
+					$next = $response["paging"]["next"];
+					do {
+
+						$response = $this->apiRequest($next, [], $options["useCache"]);
+
+						if(is_array($response) && isset($response["data"]) && isset($response["paging"]["next"])) {
+							$items = array_merge($items, $response["data"]);
+							$itemCount = count($items);
+							$next = $response["paging"]["next"];
+						} else {
+							$itemCount = $this->count;
+						}
+
+					} while($itemCount < $this->count);
+				}
+				
+				$count = $this->count && $this->count <= $itemCount ? $this->count : $itemCount;
+				for($i = 0; $i < $count; $i++) {
+					$item = $items[$i];
+					if($options["asArray"]) {
+						$data[] = $item;
+					} else {
+
+						$media = $this->wire(new WireData());
+						foreach([
+							"id" => ["id"],
+							"type" => ["media_type"],
+							"caption" => ["alt", "description", "tags"],
+							"media_url" => ["src", "url"],
+							"timestamp" => ["created", "createdStr"],
+							"href" => ["permalink"],
+							"thumbnail_url" => ["src"], //@todo
+						] as $key => $properties) {
+							if(isset($item[$key])) {
+								
+								$value = $item[$key];
+								foreach($properties as $property) {
+									switch($key) {
+										case "caption":
+											if($property == "tags") {
+												$value = $this->getTags($value);
+											} else {
+												$value = $this->wire("sanitizer")->entities1($value, true);
+											}
+											break;
+										case "timestamp":
+											if($property == "createdStr") {
+												$value = strtotime($value);
+											}
+											break;
+									}
+									$media->set($property, $value);
+								}
+							}
+						}
+
+						if($media) $data->add($media);
+					}
+				}
+
+			} else {
+
+				$this->logError($this->_("Could not process user media"), $response);
+			}
+
+		} else {
+			
+			$this->logError(
+				$this->_("Could not get user media"),
+				$this->getArgs(func_get_args(), ["username", "options"])
+			);
+		}
+
+		return $data;
 	}
 
 	/**
@@ -158,76 +288,229 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/user
 	 *
 	 * @param string|int $username
+	 * @param bool $useCache
 	 * @param string $accessToken
 	 * @return array|false
-	 * @todo Make fields configurable
 	 *
 	 */
-	public function getUserProfile($username = null, $accessToken = null) {
-		$result = $this->apiRequest(self::urlGraph . $this->getUserId($username), [
-			"fields" => "account_type,id,media_count,username",
-			"access_token" => (isset($accessToken) ? $accessToken : $this->getAccessToken($username)),
-		]);
-		if(is_array($result)) {
-			//$this->log(json_encode($result)); @todo check for errors
-		} else {
-			//$this->log($this->_("Error")); @todo
-		}
-		return $result;
+	public function getProfile($username = null, $useCache = true, $accessToken = null) {
+		return $this->processApiResponse(
+			$this->apiRequest("me", [
+				"fields" => implode(",", [
+					"account_type", // The User's account type. Can be BUSINESS, MEDIA_CREATOR, or PERSONAL.
+					"id", // The User's ID.
+					"media_count", // The number of Media on the User. This field requires the instagram_graph_user_media permission.
+					"username", // The User's username.
+				]),
+				"access_token" => (isset($accessToken) ? $accessToken : $this->getAccessToken($username)),
+			], $useCache),
+			false
+		);
 	}
 
 	/**
-	 * Process a response
+	 * Get recent comments - for backwards compatibility with InstagramFeed
+	 * 
+	 * If called, returns a blank array as comments cannot be access by this API.
+	 * 
+	 * #pw-group-instagram-feed
 	 *
-	 * #pw-hooker
-	 *
-	 * @param HookEvent $event
-	 * @todo document process
+	 * @param array $media
+	 * @return array
 	 *
 	 */
-	public function processResponse(HookEvent $event) {
+	public function getRecentComments($media = null) {
+		$this->logError($this->_("Sorry, comments are not accessible using this API."));
+		return [];
+	}
 
-		if(trim($event->arguments(1), "/") == $this->className) {
+	/**
+	 * Extension of getMedia() for backwards compatibility with InstagramFeed
+	 * 
+	 * #pw-group-instagram-feed
+	 *
+	 * @param string $username
+	 * @param array $options Options to modify behaviour
+	 * - `cacheTime` (int): The number of seconds the response be cached for.
+	 * This is set to `0` by default, and uses the module's cache time. 
+	 * If this is also 0, then the response is cached for 3600 seconds (1 hour).
+	 * - `getSize` (bool): Should the image width and height be returned? 
+	 * This is set to `false` by default as it slows response time.
+	 * @return array
+	 *
+	 */
+	public function getRecentMedia($username = null, $options = []) {
 
-			$input = $event->wire("input");
+		// Shortcuts 
+		if(isset($username) && !is_string($username)) {
+			if(is_int($username)) $options = ["cacheTime" => $username];
+			if(is_bool($username)) $options = ["getSize" => $username];
+			if(is_array($username)) $options = $username;
+			$username = null;
+		}
+		if(is_int($options)) $options = ["cacheTime" => $options];
+		if(is_bool($options)) $options = ["getSize" => $options];
 
-			if($input->get->pageName("error")) {
-				//$this->log(json_encode($input->get)); @todo
-				// error_reason error_description
-			} else {
-				$data = [];
-				$code = $input->get->text("code");
-				$state = $input->get->text("state");
-				if($code) {
-					$cacheTime = $this->cacheTime;
-					$this->cacheTime = 0;
-					if($state == $this->getState()) {
-						$oAuth = $this->requestOAuthAccessToken($code);
-						if($oAuth) {
-							$data = $oAuth;
-							$access = $this->requestAccessToken($oAuth["access_token"]);
-							if($access) {
-								$data = array_merge($data, $access);
-								$profile = $this->getUserProfile($oAuth["user_id"], $oAuth["access_token"]);
-								$username = $profile && isset($profile["username"]) ? $profile["username"] : false;
-								if($username) {
-									if($this->saveAccessData($username, $data)) {
-										$this->cacheTime = $cacheTime;
-										$session = $event->wire("session");
-										$session->message(sprintf($this->_("%2 successfully authenticated."), $username));
-										$session->redirect($event->wire("modules")->getModuleEditUrl($this));
-									}
-								}
-							}
-						}
-					} else {
-						//$this->log($this->_("State error")); @todo
+		// Set default options
+		$options = array_merge([
+			"cacheTime" => 0,
+			"getSize" => false,
+		], $options);
+		
+		$items = $this->wire("cache")->getFor(
+			$this,
+			$this->cacheKey([($username ?: $this->getDefaultUser()), __FUNCTION__]),
+			function() use ($username) {
+				return $this->getMedia($username, [
+					"asArray" => true,
+					"count" => 0,
+					"imageCount" => $this->imageCount,
+				]);
+			},
+			($options["cacheTime"] ?: ($this->cacheTime ?: 3600))
+		);
+
+		$data = [];
+		if(is_array($items)) {
+
+			$count = count($items);
+			$count = $this->imageCount && $this->imageCount <= $count ? $this->imageCount : $count;
+			$i = 0;
+			foreach($items as $item) {
+
+				if($i >= $count) break;
+
+				$type = strtolower($item["media_type"]);
+				if($type == "image") {
+
+					$user = [
+						"id" => null,
+						"full_name" => null,
+						"profile_picture" => null,
+						"username" => $item["username"],
+					];
+					
+					$image = [
+						"url" => $item["media_url"],
+						"width" => null,
+						"height" => null,
+					];
+
+					if($options["getSize"]) {
+						$size = getimagesize($image["url"]);
+						$image = array_merge($image, [
+							"width" => $size[0],
+							"height" => $size[1]
+						]);
 					}
-				} else {
-					//$this->log($this->_("Unknown error?")); @todo
+
+					$timestamp = strtotime($item["timestamp"]);
+					$caption = $item["caption"];
+
+					$data[] = [
+						"id" => $item["id"],
+						"user" => $user,
+						"images" => [
+							"thumbnail" => $image,
+							"low_resolution" => $image,
+							"standard_resolution" => $image,
+						],
+						"created_time" => $timestamp,
+						"caption" => [
+							"id" => null,
+							"text" => $caption,
+							"created_time" => $timestamp,
+							"from" => $user,
+						],
+						"user_has_liked" => null,
+						"likes" => ["count" => null],
+						"tags" => $this->getTags($caption),
+						"filter" => null,
+						"comments" => ["count" => null],
+						"type" => $type,
+						"link" => $item["permalink"],
+						"location" => [
+							"latitude" => null,
+							"longitude" => null,
+							"name" => null,
+							"id" => null,
+						],
+						"attribution" => null,
+						"users_in_photo" => null,
+					];
+
+					$i++;
 				}
 			}
 		}
+		
+		return $data;
+	}
+
+	/**
+	 * Extension of getMedia()/getRecentMedia() for backwards compatibility with InstagramFeed
+	 * 
+	 * #pw-group-instagram-feed
+	 *
+	 * @param string $tag
+	 * @param string $username
+	 * @param array $options Options to modify behaviour
+	 * @return array
+	 * @see InstagramBasicDisplayApi::getRecentMedia()
+	 *
+	 */
+	public function getRecentMediaByTag($tag, $username = null, $options = []) {
+
+		$imageCount = $this->imageCount;
+		$this->setImageCount = 0;
+
+		$i = 0;
+		$data = [];
+		foreach($this->getRecentMedia($username, $options) as $item) {
+			if($i >= $imageCount) break;
+			if(in_array($tag, $item["tags"])) {
+				$data[] = $item;
+				$i++;
+			}
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Get the user's ID from their username
+	 * 
+	 * #pw-group-instagram-feed
+	 *
+	 * @param string $username
+	 * @return int
+	 *
+	 */
+	public function getUserIdByUsername($username = "") {
+		$data = $this->getAccessData($username);
+		return $data["user_id"];
+	}
+
+	/**
+	 * Set the image count
+	 * 
+	 * #pw-group-instagram-feed
+	 *
+	 * @param int $imageCount
+	 * @return $this
+	 *
+	 */
+	public function setImageCount($imageCount = 4) {
+		/*$max = 24;
+		if($imageCount >= $max) {
+			$this->logError(
+				sprintf($this->_("A maximum of 24 images can be returned using %s"), "`getRecentMedia()`"),
+				["imageCount" => $imageCount]
+			);
+			$imageCount = $max;
+		}*/
+		$this->imageCount = (int) $imageCount;
+		return $this;
 	}
 
 	/**
@@ -235,31 +518,80 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 * #pw-internal
 	 *
-	 * @param string $url
+	 * @param string $endpoint
 	 * @param array $data
+	 * @param bool $useCache
 	 * @return array|false
-	 * @todo make cache time
 	 *
 	 */
-	protected function apiRequest($url, array $data) {
+	protected function apiRequest($endpoint, array $data, $useCache = true) {
+
 		$http = $this->wire(new WireHttp());
-		if($this->cacheTime) {
-			$cacheName = $url . (isset($data["access_token"]) ?
-				"/" . $data["access_token"] :
-				"?" . str_replace(",", "-", http_build_query($data))
-			);
-			return $this->wire("cache")->getFor(
+
+		// Get the username and access data
+		$username = "";
+		$accessData = [];
+		if(isset($data["access_token"])) {
+			foreach($this->getAccessData() as $username => $accessData) {
+				if(isset($data["access_token"]) && $data["access_token"] == $accessData["access_token"]) {
+					break;
+				}
+			}
+		}
+
+		if($this->cacheTime && $useCache) {
+
+			$cacheData = $data;
+			if(isset($cacheData["access_token"])) unset($cacheData["access_token"]);
+			if(isset($cacheData["client_secret"])) unset($cacheData["client_secret"]);
+
+			$response = $this->wire("cache")->getFor(
 				$this,
-				$cacheName,
-				function() use ($http, $url, $data) {
-					$this->log("Request made: $url");
-					return $http->getJSON($url, true, $data);
+				$this->cacheKey([
+					$username,
+					$endpoint . (count($cacheData) ? "?" . http_build_query($cacheData) : ""),
+				]),
+				function() use ($http, $endpoint, $data) {
+					return $http->getJSON($this->getEndpoint($endpoint), true, $data);
 				},
 				$this->cacheTime
 			);
+
 		} else {
-			return $http->getJSON($url, true, $data);
+
+			// If the long-lived token expires in the next week then refresh it and reload page
+			if(isset($accessData["expires_in"]) && (($accessData["expires_in"] - (86400 * 58)) < time())) {
+				$this->refreshAccessToken($username, $accessData["access_token"]);
+			}
+
+			$response = $http->getJSON($this->getEndpoint($endpoint), true, $data);
 		}
+
+		if($response === false) {
+			$args = $this->getArgs(func_get_args(), ["endpoint", "data", "useCache"]);
+			if(isset($data["client_secret"])) {
+				// Obfuscate secret
+				$args["data"]["client_secret"] = $this->obfuscateSecret($data["client_secret"]);
+			}
+			// Log error
+			$this->logError($this->_("API Request Failed"), $args);
+		}
+
+		return $response;
+	}
+
+	/**
+	 * Return an optional value indicating a server-specific state
+	 *
+	 * #pw-internal
+	 *
+	 * @param array $data
+	 * @return string
+	 *
+	 */
+	protected function cacheKey(array $data) {
+		if($this->count) $data[] = $this->count;
+		return $this->wire("sanitizer")->text(base64_encode(implode(self::cacheNameDelimiter, $data)));
 	}
 
 	/**
@@ -273,12 +605,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 */
 	protected function getAccessData($username = null) {
 		$data = json_decode($this->accessData, 1);
-		if(isset($username) && empty($username)) {
-			foreach($data as $key => $value) {
-				$username = $key;
-				break;
-			}
-		}
+		if(isset($username) && empty($username)) $username = $this->getDefaultUser();
 		return isset($username) ? (isset($data[$username]) ? $data[$username] : []) : $data;
 	}
 
@@ -298,7 +625,23 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
-	 * Return an optional value indicating a server-specific state.
+	 * Get the API endpoint
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $endpoint
+	 * @return string
+	 *
+	 */
+	protected function getEndpoint($endpoint) {
+		if(strpos($endpoint, "://") === false) {
+			$endpoint = self::urlGraph . $endpoint;
+		}
+		return $endpoint;
+	}
+
+	/**
+	 * Return an optional value indicating a server-specific state
 	 *
 	 * #pw-internal
 	 *
@@ -311,22 +654,66 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	}
 
 	/**
-	 * Get the user id
+	 * Return the hashtags from the given caption
 	 *
 	 * #pw-internal
 	 *
-	 * @param int|string $username
-	 * @return int
+	 * @param string $caption
+	 * @return array
 	 *
 	 */
-	protected function getUserId($username) {
-		if(is_int($username)) return $username;
-		$data = $this->getAccessData($username);
-		return isset($data["user_id"]) ? $data["user_id"] : 0;
+	protected function getTags($caption) {
+		preg_match_all('/(#\w+)/', $caption, $matches);
+		$tags = [];
+		if(is_array($matches) && count($matches)) {
+			foreach($matches[0] as $tag) {
+				$tags[] = ltrim($tag, "#");
+			}
+		}
+		return $tags;
 	}
 
 	/**
-	 * Exchange a short-lived Instagram User Access Token for long-lived Instagram User Access Token.
+	 * Log an error message
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $message
+	 * @param array $data
+	 * @return bool
+	 *
+	 */
+	protected function logError($message, array $data = []) {
+		if(count($data)) $message .= ": " . json_encode($data);
+		return $this->log($message);
+	}
+
+	/**
+	 * Refresh a long-lived Instagram User Access Token
+	 *
+	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/refresh_access_token
+	 *
+	 * #pw-internal
+	 *
+	 * @param string $username
+	 * @param string $accessToken
+	 * @return array|false
+	 *
+	 */
+	protected function refreshAccessToken($username, $accessToken) {
+		$response = $this->processApiResponse(
+			$this->apiRequest("refresh_access_token", [
+				"grant_type" => "ig_refresh_token",
+				"access_token" => $accessToken,
+			], false),
+			$this->_("Could not refresh long-lived access token")
+		);
+		if(is_array($response)) $this->saveAccessData($username, $response);
+		return $response;
+	}
+
+	/**
+	 * Exchange a short-lived Instagram User Access Token for long-lived Instagram User Access Token
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/access_token
 	 *
@@ -337,30 +724,18 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected function requestAccessToken($oAuthAccessToken) {
-		// Perform the API request
-		$request = $this->apiRequest(self::urlGraph . "access_token", [
-			"grant_type" => "ig_exchange_token",
-			"client_secret" => $this->clientSecret,
-			"access_token" => $oAuthAccessToken,
-		]);
-		// If the request is successful, save the data
-		// If not, log the error/response
-		if($request) {
-			$data = $request;
-			if(isset($data["access_token"]) && isset($data["token_type"]) && isset($data["expires_in"])) {
-				$data["expires_in"] = time() + $data["expires_in"];
-				return $data;
-			} else {
-				//$this->log($request); @todo
-			}
-		} else {
-			//$this->log($this->_("Error")); @todo
-		}
-		return false;
+		return $this->processApiResponse(
+			$this->apiRequest("access_token", [
+				"grant_type" => "ig_exchange_token",
+				"client_secret" => $this->clientSecret,
+				"access_token" => $oAuthAccessToken,
+			], false),
+			$this->_("Could not exchange token for long-lived token")
+		);
 	}
 
 	/**
-	 * Exchange an Authorization Code for a short-lived Instagram User Access Token.
+	 * Exchange an Authorization Code for a short-lived Instagram User Access Token
 	 *
 	 * https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-access-token
 	 *
@@ -371,35 +746,31 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected function requestOAuthAccessToken($code) {
-		// Perform the API request
-		$request = $this->wire(new WireHttp())->post(self::urlAccess . "oauth/access_token", [
-			"client_id" => $this->clientId,
-			"client_secret" => $this->clientSecret,
-			"grant_type" => "authorization_code",
-			"redirect_uri" => $this->getRedirectUri(),
-			"code" => $code,
-		]);
-		// If the request is successful, save the data and return the short-lived access token
-		// If not, log the error/response
-		if($request) {
-			$data = json_decode($request, 1);
-			if(isset($data["user_id"]) && isset($data["access_token"])) {
-				$data["oauth_access_token"] = $data["access_token"];
-				return $data;
-			} else {
-				/*
-				{
-				"error_type": "OAuthException",
-				"code": 400,
-				"error_message": "Matching code was not found or was already used"
-				} @todo
-				*/
-				//$this->log($request); @todo
-			}
-		} else {
-			//$this->log($this->_("Error")); @todo
+
+		$args = [
+			"endpoint" => "oauth/access_token",
+			"data" => [
+				"client_id" => $this->clientId,
+				"client_secret" => $this->clientSecret,
+				"grant_type" => "authorization_code",
+				"redirect_uri" => $this->getRedirectUri(),
+				"code" => $code,
+			],
+		];
+		$response = $this->wire(new WireHttp())->post(self::urlAccess . $args["endpoint"], $args["data"]);
+
+		if($response === false) {
+			// Obfuscate secret
+			$args["data"]["client_secret"] = $this->obfuscateSecret($args["data"]["client_secret"]);
+			// Log error
+			$this->logError($this->_("API Request Failed"), $args);
 		}
-		return false;
+
+		return $this->processApiResponse($response, [
+			"check" => ["user_id", "access_token"],
+			"set" => ["oauth_access_token" => "access_token"],
+			"error" => $this->_("Could not exchange code for token"),
+		]);
 	}
 
 	/**
@@ -413,32 +784,181 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected function saveAccessData($username, $data = []) {
-
-		/*$modules = $this->wire("modules");
-
-		if(is_array($id)) {
-			$data = $id;
-			$id = $data["user_id"];
-		}*/
-
 		$tokens = $this->getAccessData();
-		/*if(is_int($data)) {
-			$userId = $data;
-			if(isset($tokens[$userId])) {
-				$data = $tokens[$userId];
-				unset($tokens[$userId]);
-			}
-		} else if(!is_array($data)) {
-			$data = [$data];
-		}
-
-		$this->log("T: " . json_encode($tokens));*/
 		if(isset($tokens[$username])) {
 			$data = array_merge($tokens[$username], $data);
 		}
-
 		$tokens[$username] = $data;
-
 		return $this->wire("modules")->saveConfig($this, "accessData", json_encode($tokens));
+	}
+
+	/**
+	 * Get the arguments and return as an associative array
+	 *
+	 * #pw-internal
+	 * 
+	 * @param array $args
+	 * @param array $keys
+	 * @return array
+	 *
+	 */
+	private function getArgs(array $args, array $keys) {
+		$a = [];
+		foreach($args as $i => $arg) {
+			if($i < count($keys)) $a[$keys[$i]] = $arg;
+		}
+		return $a;
+	}
+
+	/**
+	 * Obfuscate the client secret
+	 *
+	 * #pw-internal
+	 * 
+	 * @param string $secret
+	 * @return string
+	 *
+	 */
+	private function obfuscateSecret($secret) {
+		return substr($secret, 0, 3) . 
+			str_repeat("*", strlen($secret) - 6) . 
+			substr($secret, -3);
+	}
+
+	/**
+	 * Process a response from an API request
+	 *
+	 * #pw-internal
+	 * 
+	 * @param mixed $response
+	 * @param array $options
+	 * @return array|false
+	 *
+	 */
+	private function processApiResponse($response, $options = []) {
+
+		// Shortcuts
+		if(!is_array($options)) {
+			$options = is_bool($options) ? 
+				["check" => $options, "set" => $options] : 
+				["error" => $options];
+		}
+
+		// Set default options
+		$options = array_merge([
+			"check" => ["access_token", "token_type", "expires_in"],
+			"error" => $this->_("Error"),
+			"set" => ["expires_in" => time()],
+		], $options);
+
+		$data = is_array($response) ? $response : json_decode($response, 1);
+		if(is_array($data)) {
+
+			// Check that the response is successful
+			$success = true;
+			if(is_array($options["check"])) {
+				foreach($options["check"] as $key) {
+					if(!isset($data[$key])) $success = false;
+				}
+			}
+
+			if($success) {
+
+				// Set any additional values
+				if(is_array($options["set"])) {
+					foreach($options["set"] as $key => $value) {
+						if(isset($data[$value])) {
+							$data[$key] = $data[$value];
+						} else if(is_int($value)) {
+							$data[$key] = $data[$key] + $value;
+						}
+					}
+				}
+
+				// If the request is successful, return the response
+				return $data;
+
+			} else {
+
+				// If not, log the response
+				$this->logError($options["error"], $data);
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Process a response
+	 *
+	 * #pw-internal
+	 *
+	 */
+	private function processResponse() {
+
+		$input = $this->wire("input");
+		$session = $this->wire("session");
+
+		if($input->get->pageName("error")) {
+
+			// Cancelled Authorization
+			// https://developers.facebook.com/docs/instagram-basic-display-api/reference/oauth-authorize#canceled-authorization
+
+			$reason = $input->get->pageName("error_reason");
+			$description = $input->get->text("error_description");
+			$message = $this->_("Could not authorize user");
+
+			// Log
+			$this->logError($message, [
+				"reason" => $reason,
+				"description" => $description,
+			]);
+
+			// Set error message and redirect to the admin homepage
+			$session->error(sprintf($this->_('%1$s: %2$s'), $message, $description));
+			$session->redirect($this->wire("config")->urls->admin);
+
+		} else {
+
+			// Check that the state is correct
+			$state = $this->getState();
+			$stateRequest = $input->get->text("state");
+			if($stateRequest == $state) {
+
+				// Get the auth code
+				$code = $input->get->text("code");
+				if($code) {
+
+					// Get the token
+					$oAuth = $this->requestOAuthAccessToken($code);
+					if($oAuth) {
+
+						// Get the long-lived token
+						$data = $oAuth;
+						$access = $this->requestAccessToken($oAuth["access_token"]);
+						if($access) {
+
+							$data = array_merge($data, $access);
+							$profile = $this->getProfile($oAuth["user_id"], false, $oAuth["access_token"]);
+							$username = $profile && isset($profile["username"]) ? $profile["username"] : false;
+
+							if($username) {
+								if($this->saveAccessData($username, $data)) {
+									$session->message(sprintf($this->_('%1$s: The Instagram user %2$s has been successfully authenticated.'), $this->className, $username));
+									$session->redirect($this->wire("config")->urls->admin);
+								}
+							}
+
+						}
+					}
+
+				} else {
+					$this->log($this->_("No code returned"), $_GET);
+				}
+
+			} else {
+				$this->logError("Invalid state", [$state, $stateRequest]);
+			}
+		}
 	}
 }
