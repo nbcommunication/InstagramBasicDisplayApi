@@ -9,37 +9,45 @@
 var InstagramBasicDisplayApiConfig = {
 
 	init: function() {
-		this.copyAuthorizationCodeUri();
+		this.copyAuthUri();
 		this.toggleClientSecret();
 	},
 
 	iconWidth: 40,
 
-	copyAuthorizationCodeUri: function() {
+	copyAuthUri: function() {
 
-		var $input = $("#Inputfield_authorizationCodeUri");
-		if(!$input.length) return;
+		var $inputs = $("[data-copy]");
+		if(!$inputs.length) return;
 
-		var id = "copy-authorization-code-uri";
-		this.setInputWidth($input);
-		$input.after(this.renderButton(this.renderIcon("files-o", "Copy to Clipboard"), id));
+		var this$1 = this;
+		$inputs.each(function() {
 
-		$("#" + id).on("click", function(e) {
+			var $input = $(this);
+			var $data = $input.data("copy")
+			var id = "copy-" + $input.attr("id");
+			this$1.setInputWidth($input);
+			$input.after(this$1.renderButton(this$1.renderIcon("files-o", $data.off), id));
 
-			e.preventDefault();
+			$("#" + id).on("click", function(e) {
 
-			$input.select();
-			document.execCommand("copy");
+				e.preventDefault();
 
-			var $button = $(this);
-			var lbl = $button.html();
+				$input.select();
+				document.execCommand("copy");
+				
+				var $button = $(this);
+				var lbl = $button.html();
 
-			$button.html(InstagramBasicDisplayApiConfig.renderIcon("check", "Copied to Clipboard"));
-			setTimeout(function() {
-				$button.html(lbl);
-			}, 2048);
+				$button.html(this$1.renderIcon("check", $data.on));
+				$button.attr("data-uk-tooltip", $data.on);
+				setTimeout(function() {
+					$button.html(lbl);
+					$button.removeAttr("data-uk-tooltip");
+				}, 2048);
+			});
 		});
-	},
+	},	
 
 	renderButton: function(label, id, cls) {
 		if(cls === void 0) cls = "";
@@ -52,7 +60,11 @@ var InstagramBasicDisplayApiConfig = {
 	},
 
 	renderIcon: function(icon, title) {
-		return "<i class='fa fa-" + icon + "' title='" + title + "' aria-hidden='true'></i>";
+		return "<i " + [
+			"class='fa fa-" + icon + "'",
+			"title='" + title + "'",
+			"aria-hidden='true'",
+		].join(" ") + "></i>";
 	},
 
 	setInputWidth: function($input) {
@@ -83,7 +95,7 @@ var InstagramBasicDisplayApiConfig = {
 				$input[0].type = "password";
 				$button.html(lbl[0]);
 			}
-
+			
 			$button.toggleClass(idShow + " " + id + "-hide");
 		});
 	}
