@@ -3,7 +3,9 @@
 /**
  * Instagram Basic Display API Configuration
  * 
- * @todo remove user auth
+ * @todo Option to remove authorized user
+ * @todo Ability to reorder users (to change default)
+ * @todo If user is no longer authorized, remove and log
  * 
  */
 
@@ -45,7 +47,12 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 		}
 
 		// Add script
-		$config->scripts->add($config->urls($instagram) . "{$this->className}.js");
+		try {
+			$urlModule = $config->urls($instagram); // PW 3
+		} catch(Exception $e) {
+			$urlModule = $config->urls->root . "site/modules/$instagram->className/";
+		}
+		$config->scripts->add("$urlModule{$this->className}.js");
 
 		// Path to setting in Facebook Developer App Dashboard
 		$pathSettings = "*" . $this->_("App Dashboard > Products > Instagram > Basic Display") . "*";
@@ -101,32 +108,29 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 					$this->_("Account Type"),
 					$this->_("User ID"),
 					$this->_("Media Count"),
-					$this->_("Token Expires"),
+					$this->_("Token Renews"),
 				]);
+				$dateFormat = "d/m/Y H:i";
 				foreach(json_decode($instagram->accessData, 1) as $username => $data) {
 
 					$profile = $instagram->getProfile($username);
-					if(!is_array($profile)) {
-						$profile = [
-							"account_type" => "",
-							"id" => (isset($data["user_id"]) ? $data["user_id"] : ""),
-							"media_count" => "",
-						];
+					if(is_array($profile) && isset($profile["id"])) {
+						$expires = isset($data["expires_in"]) ? $data["expires_in"] : 0;
+						$table->row([
+							"<a href='https://www.instagram.com/$username' target='_blank'>$username</a>",
+							$profile["account_type"],
+							$profile["id"],
+							$profile["media_count"],
+							($expires ?
+								"<span title='" . (isset($datetime) ? $datetime->date($dateFormat, $expires) : date($dateFormat, $expires)) . "'>" .
+									(isset($datetime) ? $datetime->date("rel", $expires) : date($dateFormat, $expires)) .
+								"</span>" :
+								""
+							),
+						]);
+					} else {
+						$instagram->error(sprintf($this->_("The user profile for %s could not be retrieved."), $username));
 					}
-					$expires = isset($data["expires_in"]) ? $data["expires_in"] : 0;
-
-					$table->row([
-						"<a href='https://www.instagram.com/$username' target='_blank'>$username</a>",
-						$profile["account_type"],
-						$profile["id"],
-						$profile["media_count"],
-						($expires ?
-							"<span title='" . $datetime->date("d/m/Y H:i", $expires) . "'>" .
-								$datetime->date("rel", $expires) .
-							"</span>" :
-							""
-						),
-					]);
 				}
 
 				$inputfields->add([
@@ -182,7 +186,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 
 			// Cache Time
 			$query = $this->wire("database")->prepare("SELECT name FROM caches WHERE name LIKE :name");
-			$query->bindValue(":name", wireClassName($instagram, false) . "__%");
+			$query->bindValue(":name", "{$instagram->className}__%");
 			$query->execute();
 			$numCaches = $query->rowCount();
 
@@ -190,8 +194,15 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 				"type" => "integer",
 				"name" => "cacheTime",
 				"label" => $this->_("Cache"),
-				"description" => $this->_("The number of seconds an API response should be cached for."),
-				"notes" => ($numCaches ? sprintf($this->_n("There is currently %d cached request.", "There are currently %d cached requests.", $numCaches), $numCaches) : ""),
+				"description" => sprintf(
+					$this->_('The number of seconds an API response should be cached for. If set to %1$s a cache time of %2$s will be used.'),
+					"`0`",
+					"`3600`"
+				),
+				"notes" => ($numCaches ? sprintf(
+					$this->_n("There is currently %d cached request.", "There are currently %d cached requests.",
+					$numCaches
+				), $numCaches) : ""),
 				"icon" => "files-o",
 				"collapsed" => 1,
 				"appendMarkup" => ($numCaches ? 
