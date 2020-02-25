@@ -28,7 +28,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 100,
+			"version" => 101,
 			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
@@ -374,7 +374,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 				$media = $this->getMediaItem($item);
 		
 				// Get Carousel Album children
-				if($options["type"] == self::mediaTypes["carouselAlbum"]) {
+				if($media->type == self::mediaTypes["carouselAlbum"]) {
 					$request["fields"] = str_replace("caption,", "", $request["fields"]);
 					$response = $this->apiRequest("$item[id]/children", $request);
 					if($this->hasMedia($response)) {
