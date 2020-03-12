@@ -1,0 +1,18 @@
+#instagram-accounts tr td:last-child {
+	text-align: right;
+}
+
+#instagram-accounts tr.removing-account td {
+	text-decoration: line-through;
+}
+
+#instagram-accounts .fa-trash {
+	color: red;
+	cursor: pointer;
+	opacity: 0.33;
+}
+
+#instagram-accounts tr.removing-account .fa-trash,
+#instagram-accounts .fa-trash:hover {
+	opacity: 1;
+}
