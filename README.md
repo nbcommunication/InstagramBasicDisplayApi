@@ -80,6 +80,12 @@ The access token will be renewed automatically within the week prior to expiry.
 #### **getProfile(**_string_ **$username)**
 Get a user's profile information.
 
+This method returns an associative array with the following fields/keys:
+* `username`
+* `id`
+* `account_type`
+* `media_count`
+
 ```php
 // Get the profile data of the default (first) user
 $profile = $instagram->getProfile();
@@ -95,11 +101,23 @@ if(count($profile)) {
     }
     echo "<ul>$info</ul>";
 }
-// Fields returned: username, id, account_type, media_count;
 ```
 
 #### **getImages(**_string_ **$username**, _int_ **$count)**
 Get a list of Images for a user.
+
+This method returns a `WireArray` of `WireData` objects each with the following properties:
+* `id` - The Media's ID.
+* `type` - The Media's type. Can be *IMAGE*, *VIDEO* or *CAROUSEL_ALBUM*.
+* `alt` - The Media's caption text. Not returnable for Media in albums.
+* `description` - Alias of `alt`.
+* `src` - The Media's URL.
+* `url` - Alias of `src`.
+* `tags` - An array of hashtags.
+* `created` - The Media's publish date as a unix timestamp.
+* `createdStr` - The Media's publish date in ISO 8601 format.
+* `link` - The Media's permanent URL.
+* `href` - Alias of `link`.
 
 ```php
 // Get images from the default user
@@ -127,6 +145,8 @@ echo "<ul>" .
 #### **getCarouselAlbum(**_string_ **$username)**
 Get the most recent Carousel Album for a user.
 
+This method returns a `WireData` object with the same properties as `getImage()`. It also has an additional `children` property which contains a `WireArray` of the album's images.
+
 ```php
 // Get the most recent album from the default user
 $album = $instagram->getCarouselAlbum();
@@ -149,7 +169,11 @@ if(isset($album)) {
 #### **getCarouselAlbums(**_string_ **$username**, _int_ **$count)**
 Get a list of Carousel Albums for a user.
 
+This method returns a `WireArray` of `WireData` objects each with the same properties as `getImage()`. Each item also has an additional `children` property which contains a `WireArray` of the album's images.
+
 This method should be used with care, as many API calls may need to be made to find the carousel albums requested. It is recommended to only use this if the Instagram user posts carousel albums frequently.
+
+
 
 ```php
 // Get albums from the default user 
@@ -185,6 +209,9 @@ if($albums->count()) {
 #### **getVideo(**_string_ **$username)**
 Get the most recent Video for a user.
 
+This method returns a `WireData` object with the same properties as `getImage()`. There is also an additional property for this media type:
+* `poster` - The Media's thumbnail image URL.
+
 ```php
 // Get the most recent video from the default user
 $video = $instagram->getVideo();
@@ -211,6 +238,9 @@ if(isset($video)) {
 
 #### **getVideos(**_string_ **$username**, _int_ **$count)**
 Get a list of Videos for a user.
+
+This method returns a `WireArray` of `WireData` objects each with the same properties as `getImage()`. There is also an additional property for this media type:
+* `poster` - The Media's thumbnail image URL.
 
 This method should be used with care, as many API calls may need to be made to find the videos requested. It is recommended to only use this if the Instagram user posts videos frequently.
 
