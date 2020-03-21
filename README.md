@@ -8,7 +8,7 @@ Instagram Basic Display API is an HTTP-based API that apps can use to get an Ins
 
 ## Creating a Facebook App
 
-These instructions will assist you in creating a Facebook App for the Instagram Basic Display API. 
+These instructions will assist you in creating a Facebook App for the Instagram Basic Display API.
 
 The app you will create uses the [*User Token Generator*](https://developers.facebook.com/docs/instagram-basic-display-api/overview#user-token-generator) for authentication - it does not need to be submitted for App Review. However, this does mean that you need to be able to login to the Instagram account for approval. If setting up for a client, suggest arranging a time when they can change the password temporarily to allow you to access the account and authenticate the app.
 
@@ -87,6 +87,8 @@ This method returns an associative array with the following fields/keys:
 * `media_count`
 
 ```php
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
 // Get the profile data of the default (first) user
 $profile = $instagram->getProfile();
 
@@ -120,6 +122,8 @@ This method returns a `WireArray` of `WireData` objects each with the following 
 * `href` - Alias of `link`.
 
 ```php
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
 // Get images from the default user
 $images = $instagram->getImages(); // Returns all images found in the first request
 
@@ -133,12 +137,12 @@ $images = $instagram->getImages("username"); // Returns all images found in the 
 $images = $instagram->getImages("username", 8);
 
 // Render the images
-echo "<ul>" . 
-	$images->each("<li>" . 
-		"<a href='{href}'>" . 
-			"<img src='{src}' alt='{alt}'>" . 
-		"</a>" . 
-	"</li>") . 
+echo "<ul>" .
+	$images->each("<li>" .
+		"<a href='{href}'>" .
+			"<img src='{src}' alt='{alt}'>" .
+		"</a>" .
+	"</li>") .
 "</ul>";
 ```
 
@@ -148,6 +152,8 @@ Get the most recent Carousel Album for a user.
 This method returns a `WireData` object with the same properties as `getImage()`. It also has an additional `children` property which contains a `WireArray` of the album's images.
 
 ```php
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
 // Get the most recent album from the default user
 $album = $instagram->getCarouselAlbum();
 
@@ -156,12 +162,12 @@ $album = $instagram->getCarouselAlbum("username");
 
 // Render the album
 if(isset($album)) {
-	echo "<ul>" . 
-		$album->children->each("<li>" . 
-			"<a href='{href}'>" . 
-				"<img src='{src}' alt='{alt}'>" . 
-			"</a>" . 
-		"</li>") . 
+	echo "<ul>" .
+		$album->children->each("<li>" .
+			"<a href='{href}'>" .
+				"<img src='{src}' alt='{alt}'>" .
+			"</a>" .
+		"</li>") .
 	"</ul>";
 }
 ```
@@ -176,7 +182,9 @@ This method should be used with care, as many API calls may need to be made to f
 
 
 ```php
-// Get albums from the default user 
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
+// Get albums from the default user
 $albums = $instagram->getCarouselAlbums(); // 4 returned if found
 
 // Get 2 albums from the default user
@@ -190,18 +198,18 @@ $albums = $instagram->getCarouselAlbums("username", 3);
 
 // Render the albums
 if($albums->count()) {
-	echo "<ul>" . 
+	echo "<ul>" .
 		$instagram->getCarouselAlbums()->each(function($album) {
-			return "<li>" . 
-				"<ul>" . 
-					$album->children->each("<li>" . 
-						"<a href='{href}'>" . 
-							"<img src='{src}' alt='{alt}'>" . 
-						"</a>" . 
-					"</li>") . 
-				"</ul>" . 
+			return "<li>" .
+				"<ul>" .
+					$album->children->each("<li>" .
+						"<a href='{href}'>" .
+							"<img src='{src}' alt='{alt}'>" .
+						"</a>" .
+					"</li>") .
+				"</ul>" .
 			"</li>";
-		}) . 
+		}) .
 	"</ul>";
 }
 ```
@@ -213,6 +221,8 @@ This method returns a `WireData` object with the same properties as `getImage()`
 * `poster` - The Media's thumbnail image URL.
 
 ```php
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
 // Get the most recent video from the default user
 $video = $instagram->getVideo();
 
@@ -222,12 +232,12 @@ $video = $instagram->getVideo("username");
 // Render the video
 if(isset($video)) {
 
-	echo "<video " . 
-		"src='$video->src' " . 
-		"poster='$video->poster' " . 
-		"type='video/mp4' " . 
-		"controls " . 
-		"playsinline" . 
+	echo "<video " .
+		"src='$video->src' " .
+		"poster='$video->poster' " .
+		"type='video/mp4' " .
+		"controls " .
+		"playsinline" .
 	"></video>";
 
 	if($video->description) {
@@ -245,7 +255,9 @@ This method returns a `WireArray` of `WireData` objects each with the same prope
 This method should be used with care, as many API calls may need to be made to find the videos requested. It is recommended to only use this if the Instagram user posts videos frequently.
 
 ```php
-// Get videos from the default user 
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
+// Get videos from the default user
 $videos = $instagram->getVideos(); // 4 returned if found
 
 // Get 2 videos from the default user
@@ -259,18 +271,67 @@ $videos = $instagram->getVideos("username", 3);
 
 // Render the videos
 if($videos->count()) {
-	echo "<ul>" . 
-		$videos->each("<li>" . 
-			"<video " . 
-				"src='{src}' " . 
-				"poster='{poster}' " . 
-				"type='video/mp4' " . 
-				"controls " . 
-				"playsinline" . 
-			"></video>" . 
-		"</li>") . 
+	echo "<ul>" .
+		$videos->each("<li>" .
+			"<video " .
+				"src='{src}' " .
+				"poster='{poster}' " .
+				"type='video/mp4' " .
+				"controls " .
+				"playsinline" .
+			"></video>" .
+		"</li>") .
 	"</ul>";
 }
+```
+
+#### **getMedia(**_string_ **$username**, _int_ **$count)**
+Get a list of Media for a user.
+
+The following example demonstrates how this can be used to create a multi-media gallery using the [UIkit](https://getuikit.com) [Grid](https://getuikit.com/docs/grid), [Cover](https://getuikit.com/docs/cover) and [Lightbox](https://getuikit.com/docs/lightbox) components:
+```php
+// Function for rendering items
+function renderInstagramItem($src, $alt, $href = null) {
+	if(is_null($href)) $href = $src;
+	return "<a href='$href' data-caption='$alt' " . ($src !== $href ? "data-poster='$src' " : "") . "class='uk-display-block uk-cover-container'>" .
+		"<canvas width='640' height='640'></canvas>" .
+		"<img src='$src' alt='$alt' data-uk-cover>" .
+	"</a>";
+}
+
+// Get the module
+$instagram = $modules->get("InstagramBasicDisplayApi");
+
+// Get the 16 most recent items and render them based on type
+$items = [];
+foreach($instagram->getMedia(16) as $item) {
+	switch($item->type) {
+		case "VIDEO":
+			$items[] = renderInstagramItem($item->poster, $item->alt, $item->src);
+			break;
+		case "CAROUSEL_ALBUM":
+			// If 4 or greater items, display a grid of the first 4 images
+			// Otherwise display the main image (no break, moves to default)
+			if($item->children->count() >= 4) {
+				$items[] = "<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>" .
+					$item->children->find("limit=4")->each(function($item) {
+						return "<div>" . renderInstagramItem($item->src, $item->alt) . "</div>";
+					}) .
+				"</div>";
+				break;
+			}
+		default: // IMAGE
+			$items[] = renderInstagramItem($item->src, $item->alt);
+			break;
+	}
+}
+
+// Render the items as a grid
+$out .= "<div class='uk-grid-collapse uk-child-width-1-2 uk-child-width-1-4@s' data-uk-grid data-uk-lightbox>";
+foreach($items as $item) {
+	$out .= "<div>$item</div>";
+}
+$out .= "</div>";
 ```
 
 ## Backwards Compatibility with Instagram Feed
@@ -279,7 +340,7 @@ The primary reason for this module's development was to retain functionality on 
 To assist with upgrading, this module replicates some methods provided by Instagram Feed:
 
 #### **getRecentMedia(**_string_ **$username)**
-Get the most recent media published by a user. 
+Get the most recent media published by a user.
 
 This is probably the most commonly used method from [InstagramFeed](https://modules.processwire.com/modules/instagram-feed/). You should not need to change your method call, however some of the values returned by the deprecated API are no longer present and are returned as `null` instead.
 
@@ -325,7 +386,7 @@ $instagram = $modules->get("InstagramBasicDisplayApi");
 $images = $instagram->getRecentMediaByTag("tagname");
 ```
 
-As the Basic Display API differs from the deprecated one, there will be differences in what data is returned, but for the most part this should only be some values returning as `null` where they had a value previously such as `user_has_liked` or `users_in_photo`. 
+As the Basic Display API differs from the deprecated one, there will be differences in what data is returned, but for the most part this should only be some values returning as `null` where they had a value previously such as `user_has_liked` or `users_in_photo`.
 
 You should test thoroughly before deploying the upgrade.
 
