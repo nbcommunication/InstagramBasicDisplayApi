@@ -327,11 +327,11 @@ foreach($instagram->getMedia(16) as $item) {
 }
 
 // Render the items as a grid
-$out .= "<div class='uk-grid-collapse uk-child-width-1-2 uk-child-width-1-4@s' data-uk-grid data-uk-lightbox>";
+echo "<div class='uk-grid-collapse uk-child-width-1-2 uk-child-width-1-4@s' data-uk-grid data-uk-lightbox>";
 foreach($items as $item) {
-	$out .= "<div>$item</div>";
+	echo "<div>$item</div>";
 }
-$out .= "</div>";
+echo "</div>";
 ```
 
 ## Backwards Compatibility with Instagram Feed
