@@ -2,7 +2,7 @@
 
 /**
  * Instagram Basic Display API Configuration
- * 
+ *
  */
 
 class InstagramBasicDisplayApiConfig extends ModuleConfig {
@@ -16,6 +16,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 	public function getDefaults() {
 		return [
 			"cacheTime" => 3600,
+			"limit" => 24,
 		];
 	}
 
@@ -46,7 +47,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 			} else {
 				$instagram->error(sprintf($this->_("Could not add user account %s"), $username));
 			}
-			
+
 			$this->_addUsername = "";
 			$this->_addToken = "";
 
@@ -63,7 +64,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 			}
 
 			$this->_removeAccount = [];
-			
+
 		} else if($input->post("clearCache")) {
 			// Clear the Cache
 			$this->wire("cache")->deleteFor($instagram);
@@ -126,7 +127,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 				$this->_("Token Renews"),
 				"",
 			]);
-			
+
 			foreach($accounts as $username => $account) {
 
 				$id = "remove_$username";
@@ -164,6 +165,15 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 				"icon" => "instagram",
 				"value" => $table->render(),
 			]);
+
+			$inputfields->add([
+				"type" => "integer",
+				"name" => "limit",
+				"label" => $this->_("Limit"),
+				"description" => $this->_("The default number of items to return:"),
+				"icon" => "th",
+				"collapsed" => 1,
+			]);
 		}
 
 		// Cache Time
@@ -188,11 +198,11 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 			), $numCaches) : ""),
 			"icon" => "files-o",
 			"collapsed" => 1,
-			"appendMarkup" => ($numCaches ? 
+			"appendMarkup" => ($numCaches ?
 				$modules->get("InputfieldSubmit")
 					->attr("name+id", "clearCache")
 					->attr("value", $this->_("Clear Cache"))
-					->render() : 
+					->render() :
 				""
 			),
 		]);
