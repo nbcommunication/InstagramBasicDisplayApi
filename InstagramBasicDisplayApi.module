@@ -5,7 +5,7 @@
  *
  * #pw-var $instagram
  * #pw-order-groups media, profile, instagram-feed, authentication
- * #pw-summary Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.
+ * #pw-summary Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.
  * #pw-summary-instagram-feed These methods provide some backwards compatibility with Instagram Feed (https://modules.processwire.com/modules/instagram-feed/).
  * #pw-body =
  * More information here: https://developers.facebook.com/docs/instagram-basic-display-api/
@@ -13,7 +13,6 @@
  *
  * @copyright 2020 NB Communication Ltd
  * @license Mozilla Public License v2.0 http://mozilla.org/MPL/2.0/
- * @todo test clear cache on 2.7
  *
  */
 
@@ -29,8 +28,8 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 121,
-			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.",
+			"version" => 130,
+			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
 			"autoload" => "template=admin",
@@ -60,6 +59,14 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	];
 
 	/**
+	 * The username of the request being made
+	 *
+	 * @var string
+	 *
+	 */
+	protected $currentUsername = null;
+
+	/**
 	 * The number of images to be returned
 	 *
 	 * @var int
@@ -68,11 +75,22 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	protected $imageCount = 4;
 
 	/**
+	 * The maximum number of items to return
+	 *
+	 * @var int
+	 *
+	 */
+	protected $maxLimit = 100;
+
+	/**
 	 * Initialize the module
 	 *
 	 */
 	public function init() {
-		// Do Nothing
+		// Reset pagination if request is not AJAX
+		if(!$this->isAjax() && $this->wire("page")->template->name !== "admin") {
+			$this->wire("session")->remove($this, $this->getNextKey());
+		}
 	}
 
 	/**
@@ -83,7 +101,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		// Hook before the admin controller
 		// No need to hook on AJAX requests
-		if(!$this->wire("config")->ajax) {
+		if(!$this->isAjax()) {
 
 			$this->addHookBefore("ProcessController::execute", function(HookEvent $event) {
 
@@ -234,7 +252,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @see InstagramBasicDisplayApi::getMedia()
 	 *
 	 */
-	public function getCarouselAlbums($username = null, $count = 4) {
+	public function getCarouselAlbums($username = null, $count = 0) {
 		if(!$count) $count = $this->imageCount;
 		return $this->getMediaByType(self::mediaTypes["carouselAlbum"], $username, $count);
 	}
@@ -308,13 +326,17 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @param string $username The username of the Instagram user.
 	 * @param array $options Options to modify default behaviour:
 	 * - `asArray` (bool): Should the data be returned as an array? (default=false)
+	 * - `children` (bool): Should the children of any carousel albums be returned? (default=true)
+	 * - `json` (bool): Should the data be returned as JSON? (default=false)
 	 * - `count` (int): The number of items to return (default=0).
 	 * - `tag` (string): An optional tag to filter by (default="").
 	 * - `type` (string): The type of media to return (default="").
-	 * @return WireArray|array
+	 * @return WireArray|array|string
 	 *
 	 */
 	public function getMedia($username = null, $options = []) {
+
+		$session = $this->wire("session");
 
 		// Get default options
 		$options = $this->getMediaOptions($username, $options);
@@ -328,7 +350,11 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		}
 
 		// Remove leading hashtag from a given tag
-		if($options["tag"]) $options["tag"] = ltrim($options["tag"], "#");
+		if($options["tag"]) {
+			$options["tag"] = ltrim($options["tag"], "#");
+			$options["count"] = $options["limit"];
+			$options["limit"] = $this->maxLimit;
+		}
 
 		// Make sure this is a valid username
 		if(isset($username)) {
@@ -342,6 +368,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		}
 
 		$request = [
+			"access_token" => $this->getAccessToken($username),
 			"fields" => implode(",", [
 				"caption", // The Media's caption text. Not returnable for Media in albums.
 				"id", // The Media's ID.
@@ -352,90 +379,117 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 				"timestamp", // The Media's publish date in ISO 8601 format.
 				"username", // The Media owner's username.
 			]),
-			"access_token" => $this->getAccessToken($username),
+			"limit" => $options["limit"],
 		];
 
-		$data = $this->wire("cache")->getFor(
-			$this,
-			$this->getCacheKey([__FUNCTION__, $username], array_merge($options, ["asArray" => true])),
-			function() use ($username, $options, $request) {
+		$isAjax = $this->isAjax();
+		$nextKey = $this->getNextKey();
 
-				$response = $this->apiRequest("me/media", $request);
+		$data = [];
+		$next = $session->getFor($this, $nextKey); // Lazy pagination
+		if($next === false) return $options["json"] ? "" : $this->getBlankArray();
 
-				$data = [];
-				if(is_array($response)) {
+		$response = isset($next) ? $this->apiRequest($next) : $this->apiRequest("me/media", $request);
+		if(is_array($response)) {
 
-					if($this->hasMedia($response)) {
+			if($this->hasMedia($response)) {
 
-						$items = $this->filterMedia($response["data"], $options);
-						$itemCount = count($items);
-						$totalCount = $options["imageCount"] ?: $options["count"];
+				$items = $this->filterMedia($response["data"], $options);
+				$itemCount = count($items);
+				$totalCount = $options["count"] ?: $options["limit"];
 
-						if(((!$totalCount && !$itemCount) || ($totalCount && $totalCount > $itemCount)) && isset($response["paging"]["next"])) {
+				$next = isset($response["paging"]["next"]) ? $response["paging"]["next"] : null;
+				if(isset($next)) {
 
-							$next = $response["paging"]["next"];
-							do {
+					if($itemCount && $totalCount && $totalCount > $itemCount) {
 
-								$response = $this->apiRequest($next);
+						do {
 
-								if($this->hasMedia($response) && isset($response["paging"]["next"])) {
-									$items = array_merge($items, $this->filterMedia($response["data"], $options));
-									$itemCount = count($items);
-									$next = $response["paging"]["next"];
-								} else {
-									$itemCount = $totalCount;
+							$response = $this->apiRequest($next);
+
+							if($this->hasMedia($response) && isset($response["paging"]["next"])) {
+								$items = array_merge($items, $this->filterMedia($response["data"], $options));
+								$itemCount = count($items);
+								$next = $response["paging"]["next"];
+							} else {
+								$itemCount = $totalCount;
+							}
+
+						} while($itemCount < $totalCount);
+
+					} else if($isAjax) {
+
+						// Set the next link into session for retrieving on the next call
+						$session->setFor($this, $nextKey, $next);
+					}
+
+				} else if($isAjax) {
+
+					// Set next to false to prevent further API calls
+					$session->setFor($this, $nextKey, false);
+				}
+
+				$count = $totalCount && $totalCount <= $itemCount ? $totalCount : $itemCount;
+				$i = 0;
+				foreach($items as $item) {
+					if($i++ >= $count) break;
+					$data[] = $item;
+				}
+
+				if(count($data)) {
+
+					$json = $options["json"];
+					if(!$options["asArray"] || $json) {
+
+						$items = $data;
+						// Convert to WireArray/WireData/array
+						$data = $this->getBlankArray($json);
+						foreach($items as $item) {
+
+							$media = $this->getMediaItem($item, $json);
+
+							// Get Carousel Album children
+							$type = $json ? $media["type"] : $media->type;
+							if($options["children"] && $type == self::mediaTypes["carouselAlbum"]) {
+								$request["fields"] = str_replace("caption,", "", $request["fields"]);
+								$response = $this->apiRequest("$item[id]/children", $request);
+								if($this->hasMedia($response)) {
+									$children = $this->getBlankArray($json);
+									foreach($response["data"] as $child) {
+										$childMedia = $this->getMediaItem($child, $json);
+										if($json) {
+											$children[] = $childMedia;
+										} else {
+											$children->add($childMedia);
+										}
+									}
+									if($json) {
+										$media["children"] = $children;
+									} else {
+										$media->set("children", $children);
+									}
 								}
+							}
 
-							} while($itemCount < $totalCount);
+							if($json) {
+								$data[] = $media;
+							} else {
+								$data->add($media);
+							}
 						}
-
-						$count = $totalCount && $totalCount <= $itemCount ? $totalCount : $itemCount;
-						for($i = 0; $i < $count; $i++) {
-							$data[] = $items[$i];
-						}
-
-					} else {
-
-						$this->logError($this->_("Could not process user media"), $response);
 					}
 
-				} else {
-
-					$this->logError(
-						$this->_("Could not get user media"),
-						["username" => $username, "options" => $options]
-					);
+					if($json) $data = json_encode($data);
 				}
 
-				return $data;
-			},
-			$this->getCacheTime()
-		);
+			} else {
 
-		if(!$options["asArray"] && is_array($data)) {
-
-			// Convert to WireArray/WireData
-			$items = $data;
-			$data = new WireArray();
-			foreach($items as $item) {
-
-				$media = $this->getMediaItem($item);
-
-				// Get Carousel Album children
-				if($media->type == self::mediaTypes["carouselAlbum"]) {
-					$request["fields"] = str_replace("caption,", "", $request["fields"]);
-					$response = $this->apiRequest("$item[id]/children", $request);
-					if($this->hasMedia($response)) {
-						$children = new WireArray();
-						foreach($response["data"] as $child) {
-							$children->add($this->getMediaItem($child));
-						}
-						$media->set("children", $children);
-					}
-				}
-
-				$data->add($media);
+				$this->logError($this->_("Could not process user media"), $response);
 			}
+
+		} else {
+
+			$this->logError($this->_("Could not get user media"), ["username" => $username, "options" => $options]);
 		}
 
 		return $data;
@@ -549,95 +603,85 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		// Set default options
 		$options = array_merge([
 			"getSize" => false,
+			"limit" => $this->imageCount,
 			"tag" => "",
 		], $options);
 
-		return $this->wire("cache")->getFor(
-			$this,
-			$this->getCacheKey([__FUNCTION__, $username, $this->imageCount], $options),
-			function() use ($username, $options) {
+		$items = $this->getMedia($username, array_merge($options, [
+			"asArray" => true,
+			"type" => self::mediaTypes["image"],
+		]));
 
-				$items = $this->getMedia($username, [
-					"asArray" => true,
-					"count" => 0,
-					"imageCount" => $this->imageCount,
-					"type" => self::mediaTypes["image"],
-					"tag" => $options["tag"],
-				]);
+		$data = [];
+		if(is_array($items)) {
 
-				$data = [];
-				if(is_array($items)) {
+			$count = count($items);
+			$count = $this->imageCount && $this->imageCount <= $count ? $this->imageCount : $count;
+			$i = 0;
+			foreach($items as $item) {
 
-					$count = count($items);
-					$count = $this->imageCount && $this->imageCount <= $count ? $this->imageCount : $count;
-					$i = 0;
-					foreach($items as $item) {
+				if($i >= $count) break;
 
-						if($i >= $count) break;
+				$user = [
+					"id" => null,
+					"full_name" => null,
+					"profile_picture" => null,
+					"username" => $item["username"],
+				];
 
-						$user = [
-							"id" => null,
-							"full_name" => null,
-							"profile_picture" => null,
-							"username" => $item["username"],
-						];
+				$image = [
+					"url" => $item["media_url"],
+					"width" => null,
+					"height" => null,
+				];
 
-						$image = [
-							"url" => $item["media_url"],
-							"width" => null,
-							"height" => null,
-						];
-
-						if($options["getSize"]) {
-							$size = getimagesize($image["url"]);
-							$image = array_merge($image, [
-								"width" => $size[0],
-								"height" => $size[1]
-							]);
-						}
-
-						$timestamp = strtotime($item["timestamp"]);
-
-						$data[] = [
-							"id" => $item["id"],
-							"user" => $user,
-							"images" => [
-								"thumbnail" => $image,
-								"low_resolution" => $image,
-								"standard_resolution" => $image,
-							],
-							"created_time" => $timestamp,
-							"caption" => [
-								"id" => null,
-								"text" => $item["caption"],
-								"created_time" => $timestamp,
-								"from" => $user,
-							],
-							"user_has_liked" => null,
-							"likes" => ["count" => null],
-							"tags" => $item["tags"],
-							"filter" => null,
-							"comments" => ["count" => null],
-							"type" => strtolower($item["media_type"]),
-							"link" => $item["permalink"],
-							"location" => [
-								"latitude" => null,
-								"longitude" => null,
-								"name" => null,
-								"id" => null,
-							],
-							"attribution" => null,
-							"users_in_photo" => null,
-						];
-
-						$i++;
-					}
+				if($options["getSize"]) {
+					$size = getimagesize($image["url"]);
+					$image = array_merge($image, [
+						"width" => $size[0],
+						"height" => $size[1]
+					]);
 				}
 
-				return $data;
-			},
-			$this->getCacheTime()
-		);
+				$timestamp = strtotime($item["timestamp"]);
+
+				$data[] = [
+					"id" => $item["id"],
+					"user" => $user,
+					"images" => [
+						"thumbnail" => $image,
+						"low_resolution" => $image,
+						"standard_resolution" => $image,
+					],
+					"created_time" => $timestamp,
+					"caption" => [
+						"id" => null,
+						"text" => $item["caption"],
+						"created_time" => $timestamp,
+						"from" => $user,
+					],
+					"user_has_liked" => null,
+					"likes" => ["count" => null],
+					"tags" => $item["tags"],
+					"filter" => null,
+					"comments" => ["count" => null],
+					"type" => strtolower($item["media_type"]),
+					"link" => $item["permalink"],
+					"location" => [
+						"latitude" => null,
+						"longitude" => null,
+						"name" => null,
+						"id" => null,
+					],
+					"attribution" => null,
+					"users_in_photo" => null,
+				];
+
+				$i++;
+			}
+		}
+
+		return $data;
 	}
 
 	/**
@@ -663,6 +707,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	public function getRecentMediaByTag($tag, $username = null, $options = []) {
 		$options = $this->getMediaOptions($username, $options);
 		$options["tag"] = $tag;
+		$options["limit"] = $this->imageCount;
 		return $this->getRecentMedia($username, $options);
 	}
 
@@ -754,7 +799,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * #pw-group-media
 	 *
 	 * @param string $username The username of the Instagram user.
-	 * @param int $count The number of items to return (default=4).
+	 * @param int $limit The number of items to return (default=4).
 	 * @return WireArray
 	 * @see InstagramBasicDisplayApi::getMedia()
 	 *
@@ -775,6 +820,20 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 */
 	public function setImageCount($imageCount = 4) {
 		$this->imageCount = (int) $imageCount;
+		return $this;
+	}
+
+	/**
+	 * Set the max limit
+	 *
+	 * #pw-group-instagram
+	 *
+	 * @param int $maxLimit
+	 * @return $this
+	 *
+	 */
+	public function setMaxLimit($maxLimit = 100) {
+		$this->maxLimit = (int) $maxLimit;
 		return $this;
 	}
 
@@ -833,7 +892,6 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		if($key) $query->bindValue(":key", $key);
 		$query->execute();
 		return $query->rowCount() ? $query->fetch(PDO::FETCH_ASSOC) : [];
-
 	}
 
 	/**
@@ -927,15 +985,27 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			}
 		}
 
-		$url = strpos($endpoint, "://") === false ? "https://graph.instagram.com/$endpoint" : $endpoint;
+		// Endpoint URL
+		$urlGraph = "https://graph.instagram.com";
+		$url = strpos($endpoint, "://") === false ? "$urlGraph/$endpoint" : $endpoint;
+
+		// Cache Key
+		$cacheKey = [str_replace($urlGraph, "", $endpoint)];
+		if(isset($data["limit"])) $cacheKey[] = $data["limit"];
+		if(isset($this->currentUsername)) $cacheKey[] = $this->currentUsername;
+		$cacheKey = implode("||", $cacheKey);
+
+		// Cache Time
+		$defaultTime = 3600;
+		$cacheTime = $this->cacheTime ?: $defaultTime;
 
 		$response = $useCache ? $this->wire("cache")->getFor(
 			$this,
-			$this->getCacheKey([$endpoint], $data),
+			$this->wire("sanitizer")->text(base64_encode($cacheKey)),
 			function() use ($http, $url, $data) {
 				return $http->getJSON($url, true, $data);
 			},
-			($this->cacheTime ?: 3600)
+			($cacheTime >= (86400 * 7) ? $defaultTime : $cacheTime)
 		) : $http->getJSON($url, true, $data);
 
 		if($response === false) {
@@ -970,16 +1040,22 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		foreach($media as $item) {
 
 			// Get tags from caption
-			preg_match_all('/(#\w+)/', $item["caption"], $matches);
 			$item["tags"] = [];
-			if(is_array($matches) && count($matches)) {
-				foreach($matches[0] as $tag) {
-					$item["tags"][] = strtolower(ltrim($tag, "#"));
+			if(isset($item["caption"])) {
+				preg_match_all('/(#\w+)/', $item["caption"], $matches);
+				if(is_array($matches) && count($matches)) {
+					foreach($matches[0] as $tag) {
+						$item["tags"][] = strtolower(ltrim($tag, "#"));
+					}
 				}
 			}
-			// If the IMAGE type is specified, set CAROUSEL_ALBUM to IMAGE for added items
-			if($options["type"] == $typeImage && $item["media_type"] == self::mediaTypes["carouselAlbum"]) {
+
+			// If the IMAGE type is specified, convert other types to this type
+			if($options["type"] == $typeImage && $item["media_type"] !== $typeImage) {
 				$item["media_type"] = $typeImage;
+				if($item["media_type"] == self::mediaTypes["video"]) {
+					$item["media_url"] = $item["thumbnail_url"];
+				}
 			}
 
 			$items[] = $item;
@@ -1007,6 +1083,15 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			}
 		}
 
+		// Make sure there are no duplicates and remove invalid items
+		$media = $items;
+		$items = [];
+		foreach($media as $item) {
+			// If this isn't a valid item with a media_url, skip it
+			if(!isset($item["media_url"])) continue;
+			$items[$item["media_url"]] = $item;
+		}
+
 		return $items;
 	}
 
@@ -1022,37 +1107,21 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	protected function getAccessToken($username = null) {
 		if(is_null($username)) $username = "";
 		$account = $this->getUserAccount($username);
+		if(isset($account["username"])) $this->currentUsername = $account["username"];
 		return isset($account["token"]) ? $account["token"] : "";
 	}
 
 	/**
-	 * Get the cache key for this request
+	 * Get a blank array or WireArray
 	 *
 	 * #pw-internal
 	 *
-	 * @param array $keys
-	 * @param array $data
-	 * @return string
+	 * @param bool $array
+	 * @return WireArray|array
 	 *
 	 */
-	protected function getCacheKey(array $keys, array $data = []) {
-		if(count($data)) $keys[] = json_encode($data);
-		return $this->wire("sanitizer")->text(base64_encode(implode("||", $keys)));
-	}
-
-	/**
-	 * Get the cache time
-	 *
-	 * #pw-internal
-	 *
-	 * @param int $cacheTime
-	 * @return int
-	 *
-	 */
-	protected function getCacheTime($cacheTime = 0) {
-		$defaultTime = 3600;
-		$cacheTime = $cacheTime ?: ($this->cacheTime ?: $defaultTime);
-		return $cacheTime >= (86400 * 7) ? $defaultTime : $cacheTime;
+	protected function getBlankArray($array = false) {
+		return $array ? [] : (new WireArray());
 	}
 
 	/**
@@ -1060,7 +1129,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 * @param string $type
 	 * @param string $username
-	 * @param int
+	 * @param int $count
 	 * @return WireArray|array
 	 * @see InstagramBasicDisplayApi::getMedia()
 	 *
@@ -1070,8 +1139,13 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			$count = $username;
 			$username = null;
 		}
+		if($type == self::mediaTypes["image"] && $count) {
+			$this->limit = $count;
+			$count = 0;
+		}
 		return $this->getMedia($username, [
 			"count" => $count,
+			"limit" => ($count ? $this->maxLimit : $this->limit),
 			"type" => $type,
 		]);
 	}
@@ -1080,12 +1154,14 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * Get media item
 	 *
 	 * @param array $item
-	 * @return WireArray
+	 * @param bool $array
+	 * @return WireArray|array
 	 *
 	 */
-	protected function getMediaItem($item) {
+	protected function getMediaItem($item, $array = false) {
 
-		$media = new WireData();
+		$media = $array ? [] : (new WireData());
+
 		foreach([
 			"id" => ["id"],
 			"media_type" => ["type"],
@@ -1109,10 +1185,15 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 							}
 							break;
 					}
-					$media->set($property, $value);
+					if($array) {
+						$media[$property] = $value;
+					} else {
+						$media->set($property, $value);
+					}
 				}
 			}
 		}
+
 		return $media;
 	}
 
@@ -1131,23 +1212,37 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		if(is_array($username)) $options = $username;
 		if(is_string($options)) $options = ["type" => $options];
 		if(is_bool($options)) $options = ["asArray" => $options];
-		if(is_int($options)) $options = ["count" => $options];
+		if(is_int($options)) $options = ["limit" => $options];
 
 		// Set default options
 		$options = array_merge([
 			"asArray" => false,
+			"children" => true,
 			"count" => 0,
-			"imageCount" => 0,
+			"json" => $this->isAjax(),
+			"limit" => $this->limit,
 			"type" => "",
 			"tag" => "",
 		], $options);
 
 		if(!is_string($username)) {
-			if(is_int($username)) $options["count"] = $username;
+			if(is_int($username)) $options["limit"] = $username;
 			if(is_bool($username)) $options["asArray"] = $username;
 		}
 
 		return $options;
+	}
+
+	/**
+	 * Get the session key for getting/setting the next link
+	 *
+	 * #pw-internal
+	 *
+	 * @return string
+	 *
+	 */
+	protected function getNextKey() {
+		return "next" . $this->wire("page")->id;
 	}
 
 	/**
@@ -1174,6 +1269,18 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 */
 	protected function hasMedia($response) {
 		return is_array($response) ? isset($response["data"]) && is_array($response["data"]) && count($response["data"]) : false;
+	}
+
+	/**
+	 * Is this an AJAX request?
+	 *
+	 * #pw-internal
+	 *
+	 * @return bool
+	 *
+	 */
+	protected function isAjax() {
+		return $this->wire("config")->ajax;
 	}
 
 	/**

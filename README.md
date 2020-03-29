@@ -1,10 +1,10 @@
 # Instagram Basic Display API
-Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums.
+Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.
 
 ## Requirements
 * ProcessWire >= 2.7
 * A Facebook Developer account
-* Access to the Instagram user account
+* Access to an Instagram user account
 
 ## Creating a Facebook App
 
@@ -81,10 +81,10 @@ The access token will be renewed automatically within the week prior to expiry.
 Get a user's profile information.
 
 This method returns an associative array with the following fields/keys:
-* `username`
-* `id`
-* `account_type`
-* `media_count`
+- `username`
+- `id`
+- `account_type`
+- `media_count`
 
 ```php
 $instagram = $modules->get("InstagramBasicDisplayApi");
@@ -105,7 +105,7 @@ if(count($profile)) {
 }
 ```
 
-#### **getImages(**_string_ **$username**, _int_ **$count)**
+#### **getImages(**_string_ **$username**, _int_ **$limit)**
 Get a list of Images for a user.
 
 This method returns a `WireArray` of `WireData` objects each with the following properties:
@@ -146,6 +146,8 @@ echo "<ul>" .
 "</ul>";
 ```
 
+The main image of a carousel album and "poster" of a video is also returned.
+
 #### **getCarouselAlbum(**_string_ **$username)**
 Get the most recent Carousel Album for a user.
 
@@ -162,6 +164,7 @@ $album = $instagram->getCarouselAlbum("username");
 
 // Render the album
 if(isset($album)) {
+	if(!$album->children) return "";
 	echo "<ul>" .
 		$album->children->each("<li>" .
 			"<a href='{href}'>" .
@@ -172,14 +175,12 @@ if(isset($album)) {
 }
 ```
 
-#### **getCarouselAlbums(**_string_ **$username**, _int_ **$count)**
+#### **getCarouselAlbums(**_string_ **$username**, _int_ **$limit)**
 Get a list of Carousel Albums for a user.
 
 This method returns a `WireArray` of `WireData` objects each with the same properties as `getImage()`. Each item also has an additional `children` property which contains a `WireArray` of the album's images.
 
 This method should be used with care, as many API calls may need to be made to find the carousel albums requested. It is recommended to only use this if the Instagram user posts carousel albums frequently.
-
-
 
 ```php
 $instagram = $modules->get("InstagramBasicDisplayApi");
@@ -200,6 +201,7 @@ $albums = $instagram->getCarouselAlbums("username", 3);
 if($albums->count()) {
 	echo "<ul>" .
 		$instagram->getCarouselAlbums()->each(function($album) {
+			if(!$album->children) return "";
 			return "<li>" .
 				"<ul>" .
 					$album->children->each("<li>" .
@@ -218,7 +220,7 @@ if($albums->count()) {
 Get the most recent Video for a user.
 
 This method returns a `WireData` object with the same properties as `getImage()`. There is also an additional property for this media type:
-* `poster` - The Media's thumbnail image URL.
+- `poster` - The Media's thumbnail image URL.
 
 ```php
 $instagram = $modules->get("InstagramBasicDisplayApi");
@@ -246,11 +248,11 @@ if(isset($video)) {
 }
 ```
 
-#### **getVideos(**_string_ **$username**, _int_ **$count)**
+#### **getVideos(**_string_ **$username**, _int_ **$limit)**
 Get a list of Videos for a user.
 
 This method returns a `WireArray` of `WireData` objects each with the same properties as `getImage()`. There is also an additional property for this media type:
-* `poster` - The Media's thumbnail image URL.
+- `poster` - The Media's thumbnail image URL.
 
 This method should be used with care, as many API calls may need to be made to find the videos requested. It is recommended to only use this if the Instagram user posts videos frequently.
 
@@ -285,17 +287,18 @@ if($videos->count()) {
 }
 ```
 
-#### **getMedia(**_string_ **$username**, _int_ **$count)**
+#### **getMedia(**_string_ **$username**, _int_ **$limit)**
 Get a list of Media for a user.
 
 The following example demonstrates how this can be used to create a multi-media gallery using the [UIkit](https://getuikit.com) [Grid](https://getuikit.com/docs/grid), [Cover](https://getuikit.com/docs/cover) and [Lightbox](https://getuikit.com/docs/lightbox) components:
+
 ```php
 // Function for rendering items
 function renderInstagramItem($src, $alt, $href = null) {
 	if(is_null($href)) $href = $src;
-	return "<a href='$href' data-caption='$alt' " . ($src !== $href ? "data-poster='$src' " : "") . "class='uk-display-block uk-cover-container'>" .
+	return "<a href='$href' data-caption='$alt' class='uk-display-block uk-cover-container'" . ($src !== $href ? " data-poster='$src'" : "") . ">" .
 		"<canvas width='640' height='640'></canvas>" .
-		"<img src='$src' alt='$alt' data-uk-cover>" .
+		"<img src='$src' alt='$alt' data-uk-img data-uk-cover>" .
 	"</a>";
 }
 
@@ -313,11 +316,14 @@ foreach($instagram->getMedia(16) as $item) {
 			// If 4 or greater items, display a grid of the first 4 images
 			// Otherwise display the main image (no break, moves to default)
 			if($item->children->count() >= 4) {
-				$items[] = "<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>" .
-					$item->children->find("limit=4")->each(function($item) {
-						return "<div>" . renderInstagramItem($item->src, $item->alt) . "</div>";
-					}) .
-				"</div>";
+				$out = "";
+				$i = 0;
+				foreach($item->children as $child) {
+					$out .= "<div" . ($i++ < 4 ? "" : " class='uk-hidden'") . ">" . // Hides items after the 4th one
+						renderInstagramItem($child->src, $item->alt) .
+					"</div>";
+				}
+				$items[] = "<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>$out</div>";
 				break;
 			}
 		default: // IMAGE
@@ -327,12 +333,146 @@ foreach($instagram->getMedia(16) as $item) {
 }
 
 // Render the items as a grid
-echo "<div class='uk-grid-collapse uk-child-width-1-2 uk-child-width-1-4@s' data-uk-grid data-uk-lightbox>";
+echo "<div class='uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l' data-uk-grid data-uk-lightbox>";
 foreach($items as $item) {
 	echo "<div>$item</div>";
 }
 echo "</div>";
 ```
+
+## Pagination
+Lazy loading of items can be achieved using `getMedia()`. The following example shows how to return batches of items using AJAX requests:
+
+#### PHP
+```php
+$instagram = $modules->get("InstagramBasicDisplayApi"); // The pagination cursor is reset if the request is not AJAX, e.g. when the page is loaded.
+
+if($config->ajax) {
+	header("Content-Type: application/json");
+	echo $instagram->getMedia(); // ["json" => true] is inferred by $config->ajax
+	die();
+}
+
+echo "<div id='instagram' class='uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l' data-uk-grid data-uk-lightbox data-uk-scrollspy='" . json_encode([
+	"target" => "> div",
+	"cls" => "uk-animation-slide-bottom-small",
+	"delay" => 128,
+]) . "'></div>";
+
+```
+
+#### Javascript
+```javascript
+var instagram = {
+
+	$el: {}, // Where the items go
+	$loading: {}, // The loading spinner
+	total: 0, // The total number of items
+
+	init: function() {
+
+		this.$el = UIkit.util.$("#instagram");
+		if(!this.$el) return;
+
+		// Add the spinner
+		UIkit.util.after(this.$el, "<div id='instagram-loading' class='uk-text-center uk-margin-top uk-hidden'><span data-uk-spinner></span></div>");
+		this.$loading = UIkit.util.$("#instagram-loading");
+
+		// Get the first batch of items
+		this.get();
+	},
+
+	get: function() {
+
+		var this$1 = this;
+
+		// Show spinner
+		UIkit.util.removeClass(this$1.$loading, "uk-hidden");
+
+		// Request
+		UIkit.util.ajax(window.location.href, {
+			method: "GET",
+			headers: {"X-Requested-With": "XMLHttpRequest"},
+			responseType: "json"
+		}).then(function(xhr) {
+
+			// Hide spinner
+			UIkit.util.addClass(this$1.$loading, "uk-hidden");
+
+			var data = xhr.response;
+			if(!UIkit.util.isArray(data) || !data.length) return; // If no items do not render
+
+			var items = [];
+			data.forEach(function(item) {
+
+				switch(item.type) {
+					case "VIDEO":
+						items.push(this$1.renderItem(item.poster, item.alt, item.src));
+						break;
+					case "CAROUSEL_ALBUM":
+						// If 4 or greater items, display a grid of the first 4 images with the rest hidden
+						// Otherwise display the main image (no break, moves to default)
+						if(item.children.length >= 4) {
+							var out = "";
+							for(var i = 0; i < item.children.length; i++) {
+								out += "<div" + (i < 4 ? "" : " class='uk-hidden'") + ">" +
+									this$1.renderItem(item.children[i].src, item.alt) +
+								"</div>";
+							}
+							items.push("<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>" + out + "</div>");
+							break;
+						}
+					default: // IMAGE
+						items.push(this$1.renderItem(item.src, item.alt));
+						break;
+				}
+			});
+
+			var count = items.length;
+			if(count) {
+
+				// Wrap all items with a div
+				var out = "";
+				for(var i = 0; i < count; i++) {
+					out += "<div id='instagram-item-" + (this$1.total + i) + "'>" +
+						items[i] +
+					"</div>";
+				}
+
+				// Append items to the container
+				UIkit.util.append(this$1.$el, out);
+
+				// Attach scrollspy listener of last item of second last row
+				if(count > 5) {
+					UIkit.util.on("#instagram-item-" + (this$1.total + count - 6), "inview", function(e) {
+						this$1.get();
+					});
+				}
+
+				// Update total
+				this$1.total = this$1.total + count;
+			}
+		}, function(e) {
+			UIkit.util.addClass(this$1.$loading, "uk-hidden");
+			console.log(e); // ERROR
+		})
+	},
+
+	renderItem: function(src, alt, href) {
+		if(href === void 0) href = src;
+		return "<a href='" + href + "' data-caption='" + alt + "' class='uk-display-block uk-cover-container'" +
+			(src !== href ? " data-poster='" + src + "'" : "") + ">" +
+			"<canvas width='640' height='640'></canvas>" +
+			"<img src='" + src + "' alt='" + alt + "' data-uk-img data-uk-cover>" +
+		"</a>";
+	}
+};
+
+UIkit.util.ready(function() {
+	instagram.init();
+});
+```
+The javascript example uses [UIkit's Javascript Utilities](https://github.com/uikit/uikit-site/blob/feature/js-utils/docs/pages/javascript-utilities.md) but the same effect is achievable using plain javascript or any common library like jQuery.
 
 ## Backwards Compatibility with Instagram Feed
 The primary reason for this module's development was to retain functionality on existing websites that use the [Instagram Feed](https://modules.processwire.com/modules/instagram-feed/) module, which uses a now deprecated API.
@@ -391,6 +531,6 @@ As the Basic Display API differs from the deprecated one, there will be differen
 You should test thoroughly before deploying the upgrade.
 
 ## Notes
-* By default, 24 media items are returned in each API call.
+* By default, 24 media items are returned in each API call. You can change this in the module config. Up to 10K items can be returned at once, but it is not recommended!
 * For methods related to InstagramFeed, e.g. `getRecentMedia()`, 4 items are returned by default, as this is the default in this module.
 * Examples shown above may not work on older ProcessWire versions.
