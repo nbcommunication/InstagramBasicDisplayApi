@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1 (April 7, 2020)
+### Added
+- **InstagramBasicDisplayApi.module** The `children` option for `getMedia()` can now be specified as an integer or string to use as a separate cache time for these API requests.
+
+### Changed
+- `account_type` disabled as the API throws an error incorrectly when this is requested.
+
+
 ## 1.3.0 (March 27, 2020)
 Partial rewrite after the discovery of the `limit` API param. Everything should work as before, in fact it should work better!
 
