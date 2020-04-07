@@ -5,7 +5,7 @@
  *
  * #pw-var $instagram
  * #pw-order-groups media, profile, instagram-feed, authentication
- * #pw-summary Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.
+ * #pw-summary Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.
  * #pw-summary-instagram-feed These methods provide some backwards compatibility with Instagram Feed (https://modules.processwire.com/modules/instagram-feed/).
  * #pw-body =
  * More information here: https://developers.facebook.com/docs/instagram-basic-display-api/
@@ -28,8 +28,8 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 130,
-			"summary" => "Instagram Basic Display API is an HTTP-based API that apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
+			"version" => 131,
+			"summary" => "Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
 			"autoload" => "template=admin",
@@ -326,7 +326,8 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 * @param string $username The username of the Instagram user.
 	 * @param array $options Options to modify default behaviour:
 	 * - `asArray` (bool): Should the data be returned as an array? (default=false)
-	 * - `children` (bool): Should the children of any carousel albums be returned? (default=true)
+	 * - `children` (bool|int|string): Should the children of any carousel albums be returned?
+	 * If an integer or string is specified this will be used as the cache expiry for these requests (default=true).
 	 * - `json` (bool): Should the data be returned as JSON? (default=false)
 	 * - `count` (int): The number of items to return (default=0).
 	 * - `tag` (string): An optional tag to filter by (default="").
@@ -451,6 +452,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 							// Get Carousel Album children
 							$type = $json ? $media["type"] : $media->type;
 							if($options["children"] && $type == self::mediaTypes["carouselAlbum"]) {
+								if(!is_bool($options["children"])) $this->cacheTime = $options["children"];
 								$request["fields"] = str_replace("caption,", "", $request["fields"]);
 								$response = $this->apiRequest("$item[id]/children", $request);
 								if($this->hasMedia($response)) {
@@ -531,7 +533,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 				"fields" => implode(",", [
 					"username", // The User's username.
 					"id", // The User's ID.
-					"account_type", // The User's account type. Can be BUSINESS, MEDIA_CREATOR, or PERSONAL.
+					//"account_type", // The User's account type. Can be BUSINESS, MEDIA_CREATOR, or PERSONAL. @todo Currently throwing an error
 					"media_count", // The number of Media on the User. This field requires the instagram_graph_user_media permission.
 				]),
 				"access_token" => (isset($accessToken) ? $accessToken : $this->getAccessToken($username)),
@@ -857,7 +859,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 					"username=:username, " .
 					"token=:token, " .
 					"user_id=:id, " .
-					"account_type=:type, " .
+					//"account_type=:type, " .
 					"media_count=:count, " .
 					"token_renews=:date, " .
 					"modified=NOW()"
@@ -865,7 +867,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			$query->bindValue(":username", $username);
 			$query->bindValue(":token", $token);
 			$query->bindValue(":id", $profile["id"]);
-			$query->bindValue(":type", $profile["account_type"]);
+			//$query->bindValue(":type", $profile["account_type"]);
 			$query->bindValue(":count", $profile["media_count"]);
 			$query->bindValue(":date", $this->getRenewalDate());
 

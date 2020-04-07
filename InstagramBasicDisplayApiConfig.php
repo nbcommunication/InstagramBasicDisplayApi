@@ -40,8 +40,8 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 		if($input->post("_addUsername") && $input->post("_addToken")) {
 
 			// Add user
-			$username = $sanitizer->pageName($input->post("_addUsername"));
-			$token = $sanitizer->text($input->post("_addToken"));
+			$username = $sanitizer->pageName(trim($input->post("_addUsername")));
+			$token = $sanitizer->text(trim($input->post("_addToken")));
 			if($username && $token && $instagram->addUserAccount($username, $token)) {
 				$instagram->message(sprintf($this->_("%s has been added."), $username));
 			} else {
@@ -121,7 +121,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 			$table->setSortable(false);
 			$table->headerRow([
 				$this->_("Username"),
-				$this->_("Account Type"),
+				//$this->_("Account Type"),
 				$this->_("User ID"),
 				$this->_("Media Count"),
 				$this->_("Token Renews"),
@@ -148,7 +148,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 				$renews = strtotime($account["token_renews"]);
 				$table->row([
 					"<a href='https://www.instagram.com/$username' target='_blank' rel='noopener noreferrer'>$username</a>",
-					$account["account_type"],
+					//$account["account_type"],
 					$account["user_id"],
 					$account["media_count"],
 					"<span title='$account[token_renews]'>" .
