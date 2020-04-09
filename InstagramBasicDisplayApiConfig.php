@@ -148,7 +148,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 				$renews = strtotime($account["token_renews"]);
 				$table->row([
 					"<a href='https://www.instagram.com/$username' target='_blank' rel='noopener noreferrer'>$username</a>",
-					//$account["account_type"],
+					$account["account_type"],
 					$account["user_id"],
 					$account["media_count"],
 					"<span title='$account[token_renews]'>" .
