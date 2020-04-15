@@ -28,7 +28,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		return [
 			"title" => "Instagram Basic Display API",
-			"version" => 132,
+			"version" => 133,
 			"summary" => "Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			"author" => "chriswthomson",
 			"href" => "https://github.com/nbcommunication/InstagramBasicDisplayApi",
@@ -991,11 +991,10 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		$urlGraph = "https://graph.instagram.com";
 		$url = strpos($endpoint, "://") === false ? "$urlGraph/$endpoint" : $endpoint;
 
-		// Cache Key
-		$cacheKey = [str_replace($urlGraph, "", $endpoint)];
-		if(isset($data["limit"])) $cacheKey[] = $data["limit"];
-		if(isset($this->currentUsername)) $cacheKey[] = $this->currentUsername;
-		$cacheKey = implode("||", $cacheKey);
+		// Cache Name
+		$cacheName = str_replace($urlGraph, "", $endpoint);
+		if(isset($data["limit"])) $cacheName .= $data["limit"];
+		if(isset($this->currentUsername)) $cacheName .= $this->currentUsername;
 
 		// Cache Time
 		$defaultTime = 3600;
@@ -1003,7 +1002,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		$response = $useCache ? $this->wire("cache")->getFor(
 			$this,
-			$this->wire("sanitizer")->text(base64_encode($cacheKey)),
+			md5($cacheName),
 			function() use ($http, $url, $data) {
 				return $http->getJSON($url, true, $data);
 			},
