@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.3 (April 15, 2020)
+
+### Changed
+- **InstagramBasicDisplayApi.module** Cache name now using `md5()` and not `base64_encode()`.
+
+
 ## 1.3.2 (April 9, 2020)
 
 ### Changed
