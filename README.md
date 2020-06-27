@@ -87,17 +87,17 @@ This method returns an associative array with the following fields/keys:
 - `media_count`
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get the profile data of the default (first) user
 $profile = $instagram->getProfile();
 
 // Get the profile data of a specified user
-$profile = $instagram->getProfile("username");
+$profile = $instagram->getProfile('username');
 
 // Display the profile information
 if(count($profile)) {
-    $info = "";
+    $info = '';
     foreach($profile as $key => $value) {
         $info .= "<li>$key: $value</li>";
     }
@@ -122,7 +122,7 @@ This method returns a `WireArray` of `WireData` objects each with the following 
 * `href` - Alias of `link`.
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get images from the default user
 $images = $instagram->getImages(); // Returns all images found in the first request
@@ -131,10 +131,10 @@ $images = $instagram->getImages(); // Returns all images found in the first requ
 $images = $instagram->getImages(10);
 
 // Get images from a specified user
-$images = $instagram->getImages("username"); // Returns all images found in the first request
+$images = $instagram->getImages('username'); // Returns all images found in the first request
 
 // Get 8 images from a specified user
-$images = $instagram->getImages("username", 8);
+$images = $instagram->getImages('username', 8);
 
 // Render the images
 echo "<ul>" .
@@ -154,24 +154,24 @@ Get the most recent Carousel Album for a user.
 This method returns a `WireData` object with the same properties as `getImage()`. It also has an additional `children` property which contains a `WireArray` of the album's images.
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get the most recent album from the default user
 $album = $instagram->getCarouselAlbum();
 
 // Get the most recent album from a specified user
-$album = $instagram->getCarouselAlbum("username");
+$album = $instagram->getCarouselAlbum('username');
 
 // Render the album
 if(isset($album)) {
-	if(!$album->children) return "";
-	echo "<ul>" .
-		$album->children->each("<li>" .
-			"<a href='{href}'>" .
-				"<img src='{src}' alt='{alt}'>" .
-			"</a>" .
-		"</li>") .
-	"</ul>";
+	if(!$album->children) return '';
+	echo '<ul>' .
+		$album->children->each('<li>' .
+			'<a href="{href}">' .
+				'<img src="{src}" alt="{alt}">' .
+			'</a>' .
+		'</li>') .
+	'</ul>';
 }
 ```
 
@@ -183,7 +183,7 @@ This method returns a `WireArray` of `WireData` objects each with the same prope
 This method should be used with care, as many API calls may need to be made to find the carousel albums requested. It is recommended to only use this if the Instagram user posts carousel albums frequently.
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get albums from the default user
 $albums = $instagram->getCarouselAlbums(); // 4 returned if found
@@ -192,27 +192,27 @@ $albums = $instagram->getCarouselAlbums(); // 4 returned if found
 $albums = $instagram->getCarouselAlbums(2);
 
 // Get albums from a specified user
-$albums = $instagram->getCarouselAlbums("username"); // 4 returned if found
+$albums = $instagram->getCarouselAlbums('username'); // 4 returned if found
 
 // Get 3 albums from a specified user
-$albums = $instagram->getCarouselAlbums("username", 3);
+$albums = $instagram->getCarouselAlbums('username', 3);
 
 // Render the albums
 if($albums->count()) {
-	echo "<ul>" .
+	echo '<ul>' .
 		$instagram->getCarouselAlbums()->each(function($album) {
-			if(!$album->children) return "";
-			return "<li>" .
-				"<ul>" .
-					$album->children->each("<li>" .
-						"<a href='{href}'>" .
-							"<img src='{src}' alt='{alt}'>" .
-						"</a>" .
-					"</li>") .
-				"</ul>" .
-			"</li>";
+			if(!$album->children) return '';
+			return '<li>' .
+				'<ul>' .
+					$album->children->each('<li>' .
+						'<a href="{href}">' .
+							'<img src="{src}" alt="{alt}">' .
+						'</a>' .
+					'</li>') .
+				'</ul>' .
+			'</li>';
 		}) .
-	"</ul>";
+	'</ul>';
 }
 ```
 
@@ -223,24 +223,24 @@ This method returns a `WireData` object with the same properties as `getImage()`
 - `poster` - The Media's thumbnail image URL.
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get the most recent video from the default user
 $video = $instagram->getVideo();
 
 // Get the most recent video from a specified user
-$video = $instagram->getVideo("username");
+$video = $instagram->getVideo('username');
 
 // Render the video
 if(isset($video)) {
 
-	echo "<video " .
+	echo '<video ' .
 		"src='$video->src' " .
 		"poster='$video->poster' " .
-		"type='video/mp4' " .
-		"controls " .
-		"playsinline" .
-	"></video>";
+		'type="video/mp4" ' .
+		'controls ' .
+		'playsinline' .
+	'></video>';
 
 	if($video->description) {
 		echo "<p>$video->description</p>";
@@ -257,7 +257,7 @@ This method returns a `WireArray` of `WireData` objects each with the same prope
 This method should be used with care, as many API calls may need to be made to find the videos requested. It is recommended to only use this if the Instagram user posts videos frequently.
 
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get videos from the default user
 $videos = $instagram->getVideos(); // 4 returned if found
@@ -266,24 +266,24 @@ $videos = $instagram->getVideos(); // 4 returned if found
 $videos = $instagram->getVideos(2);
 
 // Get videos from a specified user
-$videos = $instagram->getVideos("username"); // 4 returned if found
+$videos = $instagram->getVideos('username'); // 4 returned if found
 
 // Get 3 videos from a specified user
-$videos = $instagram->getVideos("username", 3);
+$videos = $instagram->getVideos('username', 3);
 
 // Render the videos
 if($videos->count()) {
-	echo "<ul>" .
-		$videos->each("<li>" .
-			"<video " .
-				"src='{src}' " .
-				"poster='{poster}' " .
-				"type='video/mp4' " .
-				"controls " .
-				"playsinline" .
-			"></video>" .
-		"</li>") .
-	"</ul>";
+	echo '<ul>' .
+		$videos->each('<li>' .
+			'<video ' .
+				'src="{src}" ' .
+				'poster="{poster}" ' .
+				'type="video/mp4" ' .
+				'controls ' .
+				'playsinline' .
+			'></video>' .
+		'</li>') .
+	'</ul>';
 }
 ```
 
@@ -296,30 +296,30 @@ The following example demonstrates how this can be used to create a multi-media 
 // Function for rendering items
 function renderInstagramItem($src, $alt, $href = null) {
 	if(is_null($href)) $href = $src;
-	return "<a href='$href' data-caption='$alt' class='uk-display-block uk-cover-container'" . ($src !== $href ? " data-poster='$src'" : "") . ">" .
+	return "<a href='$href' data-caption='$alt' class='uk-display-block uk-cover-container'" . ($src !== $href ? " data-poster='$src'" : '') . ">" .
 		"<canvas width='640' height='640'></canvas>" .
 		"<img src='$src' alt='$alt' data-uk-img data-uk-cover>" .
 	"</a>";
 }
 
 // Get the module
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 
 // Get the 16 most recent items and render them based on type
 $items = [];
 foreach($instagram->getMedia(16) as $item) {
 	switch($item->type) {
-		case "VIDEO":
+		case 'VIDEO':
 			$items[] = renderInstagramItem($item->poster, $item->alt, $item->src);
 			break;
-		case "CAROUSEL_ALBUM":
+		case 'CAROUSEL_ALBUM':
 			// If 4 or greater items, display a grid of the first 4 images
 			// Otherwise display the main image (no break, moves to default)
 			if($item->children->count() >= 4) {
-				$out = "";
+				$out = '';
 				$i = 0;
 				foreach($item->children as $child) {
-					$out .= "<div" . ($i++ < 4 ? "" : " class='uk-hidden'") . ">" . // Hides items after the 4th one
+					$out .= "<div" . ($i++ < 4 ? '' : " class='uk-hidden'") . ">" . // Hides items after the 4th one
 						renderInstagramItem($child->src, $item->alt) .
 					"</div>";
 				}
@@ -345,18 +345,18 @@ Lazy loading of items can be achieved using `getMedia()`. The following example 
 
 #### PHP
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi"); // The pagination cursor is reset if the request is not AJAX, e.g. when the page is loaded.
+$instagram = $modules->get('InstagramBasicDisplayApi'); // The pagination cursor is reset if the request is not AJAX, e.g. when the page is loaded.
 
 if($config->ajax) {
-	header("Content-Type: application/json");
-	echo $instagram->getMedia(); // ["json" => true] is inferred by $config->ajax
+	header('Content-Type: application/json');
+	echo $instagram->getMedia(); // ['json' => true] is inferred by $config->ajax
 	die();
 }
 
 echo "<div id='instagram' class='uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l' data-uk-grid data-uk-lightbox data-uk-scrollspy='" . json_encode([
-	"target" => "> div",
-	"cls" => "uk-animation-slide-bottom-small",
-	"delay" => 128,
+	'target' => '> div',
+	'cls' => 'uk-animation-slide-bottom-small',
+	'delay' => 128,
 ]) . "'></div>";
 
 ```
@@ -442,7 +442,7 @@ var instagram = {
 				// Append items to the container
 				UIkit.util.append(this$1.$el, out);
 
-				// Attach scrollspy listener of last item of second last row
+				// Attach scrollspy listener on last item of second last row
 				if(count > 5) {
 					UIkit.util.on("#instagram-item-" + (this$1.total + count - 6), "inview", function(e) {
 						this$1.get();
@@ -505,25 +505,25 @@ For a basic implementation, where all that Instagram Feed was requesting was the
 
 ```php
 // Previously...
-$instagram = $modules->get("InstagramFeed");
+$instagram = $modules->get('InstagramFeed');
 $images = $instagram->getRecentMedia();
 
 // Now...
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 $images = $instagram->getRecentMedia();
 ```
 
 If you had changed the default image count in the module config, you may also need to call `setImageCount()` to retain this number:
 ```php
 // Images to return had been set to 8 in the InstagramFeed config
-$instagram = $modules->get("InstagramBasicDisplayApi");
+$instagram = $modules->get('InstagramBasicDisplayApi');
 $images = $instagram->setImageCount(8)->getRecentMedia();
 ```
 
 If you were getting images by tag, this also should work, but as noted above this can require numerous calls to the API, so should be used only if necessary and thoroughly tested to ensure there is no major impact on response times etc:
 ```php
-$instagram = $modules->get("InstagramBasicDisplayApi");
-$images = $instagram->getRecentMediaByTag("tagname");
+$instagram = $modules->get('InstagramBasicDisplayApi');
+$images = $instagram->getRecentMediaByTag('tagname');
 ```
 
 As the Basic Display API differs from the deprecated one, there will be differences in what data is returned, but for the most part this should only be some values returning as `null` where they had a value previously such as `user_has_liked` or `users_in_photo`.

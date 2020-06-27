@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0 (June 27, 2020)
+
+### Changed
+- Applied a number of micro optimisations (e.g. single quotes where possible).
+
+
 ## 1.3.3 (April 15, 2020)
 
 ### Changed
