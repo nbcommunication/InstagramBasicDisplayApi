@@ -27,7 +27,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	public static function getModuleInfo() {
 		return [
 			'title' => 'Instagram Basic Display API',
-			'version' => 140,
+			'version' => 141,
 			'summary' => "Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			'author' => 'nbcommunication',
 			'href' => 'https://github.com/nbcommunication/InstagramBasicDisplayApi',
@@ -44,18 +44,6 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	const dbTableName = 'instagram_basic_display_api';
-
-	/**
-	 * Media Types
-	 *
-	 * @var string
-	 *
-	 */
-	const mediaTypes = [
-		'carouselAlbum' => 'CAROUSEL_ALBUM',
-		'image' => 'IMAGE',
-		'video' => 'VIDEO',
-	];
 
 	/**
 	 * The username of the request being made
@@ -80,6 +68,18 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected $maxLimit = 100;
+
+	/**
+	 * Media Types
+	 *
+	 * @var string
+	 *
+	 */
+	protected $mediaTypes = [
+		'carouselAlbum' => 'CAROUSEL_ALBUM',
+		'image' => 'IMAGE',
+		'video' => 'VIDEO',
+	];
 
 	/**
 	 * Initialize the module
@@ -253,7 +253,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 */
 	public function getCarouselAlbums($username = null, $count = 0) {
 		if(!$count) $count = $this->imageCount;
-		return $this->getMediaByType(self::mediaTypes['carouselAlbum'], $username, $count);
+		return $this->getMediaByType($this->mediaTypes['carouselAlbum'], $username, $count);
 	}
 
 	/**
@@ -291,7 +291,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	public function getImages($username = null, $count = 0) {
-		return $this->getMediaByType(self::mediaTypes['image'], $username, $count);
+		return $this->getMediaByType($this->mediaTypes['image'], $username, $count);
 	}
 
 	/**
@@ -344,7 +344,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 		// Make sure the type is valid
 		if($options['type']) {
 			$options['type'] = strtoupper($options['type']);
-			if(!in_array($options['type'], self::mediaTypes)) {
+			if(!in_array($options['type'], $this->mediaTypes)) {
 				$options['type'] = '';
 			}
 		}
@@ -450,7 +450,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 							// Get Carousel Album children
 							$type = $json ? $media['type'] : $media->type;
-							if($options['children'] && $type == self::mediaTypes['carouselAlbum']) {
+							if($options['children'] && $type == $this->mediaTypes['carouselAlbum']) {
 								if(!is_bool($options['children'])) $this->cacheTime = $options['children'];
 								$request['fields'] = str_replace('caption,', '', $request['fields']);
 								$response = $this->apiRequest("$item[id]/children", $request);
@@ -610,7 +610,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 
 		$items = $this->getMedia($username, array_merge($options, [
 			'asArray' => true,
-			'type' => self::mediaTypes['image'],
+			'type' => $this->mediaTypes['image'],
 		]));
 
 		$data = [];
@@ -807,7 +807,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 */
 	public function getVideos($username = null, $count = 4) {
 		if(!$count) $count = $this->imageCount;
-		return $this->getMediaByType(self::mediaTypes['video'], $username, $count);
+		return $this->getMediaByType($this->mediaTypes['video'], $username, $count);
 	}
 
 	/**
@@ -1033,7 +1033,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	protected function filterMedia(array $media, array $options = []) {
 
 		$options = array_merge(['type' => '', 'tag' => ''], $options);
-		$typeImage = self::mediaTypes['image'];
+		$typeImage = $this->mediaTypes['image'];
 
 		// Set tags and type
 		$items = [];
@@ -1053,7 +1053,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			// If the IMAGE type is specified, convert other types to this type
 			if($options['type'] == $typeImage && $item['media_type'] !== $typeImage) {
 				$item['media_type'] = $typeImage;
-				if($item['media_type'] == self::mediaTypes['video']) {
+				if($item['media_type'] == $this->mediaTypes['video']) {
 					$item['media_url'] = $item['thumbnail_url'];
 				}
 			}
@@ -1139,7 +1139,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 			$count = $username;
 			$username = null;
 		}
-		if($type == self::mediaTypes['image'] && $count) {
+		if($type == $this->mediaTypes['image'] && $count) {
 			$this->limit = $count;
 			$count = 0;
 		}
