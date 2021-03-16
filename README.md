@@ -41,7 +41,7 @@ Now your Facebook app is ready, you can configure it to access the Instagram Bas
 #### Create an Instagram Basic Display App
 *Instagram > Basic Display*, click **Create New App** then **Create App**.
 
-Even though this module does not use OAuth for authentication, the app still requires some settings:
+The app requires some settings:
 * *Client OAuth Settings* - Add `https://{your-website.com}/{your-admin-url}/InstagramBasicDisplayApi` as a *Valid OAuth Redirect URI*.
 * *Deauthorize Callback URL* - Set this to `https://{your-website.com}/{your-admin-url}/InstagramBasicDisplayApi?action=deauthorize`.
 * *Data Deletion Request URL* - Set this to `https://{your-website.com}/{your-admin-url}/InstagramBasicDisplayApi?action=delete`.
