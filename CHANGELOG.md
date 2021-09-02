@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.4.3 (September 2, 2021)
+
+### Fixed
+- Added unicode flag to preg_match_all to allow special characters in `tags`.
+
 ## 1.4.0 (June 27, 2020)
 
 ### Changed
