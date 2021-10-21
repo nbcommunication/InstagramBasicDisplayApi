@@ -15,10 +15,11 @@ The app you will create uses the [*User Token Generator*](https://developers.fac
 ### Create a New Facebook App
 1. Login to your account at [https://developers.facebook.com/](https://developers.facebook.com/).
 2. *My Apps > Create App*.
-3. Give your app a *Display Name*. This cannot contain certain reserved words such as `Instagram`, `IG`, `Insta` or `Facebook`. I recommend using something like `Image Feed - ProcessWire Website`.
-4. Add a *Contact Email* if not already populated.
-5. Click **Create App ID** and complete the Security Check if required.
-6. You will be prompted to *Add a Product*. Find *Instagram* and click **Set Up**.
+3. *Select an app type* - Make sure to choose **Consumer** ! Otherwise you won't be able to choose the correct *product* (see point 7). 
+4. Give your app a *Display Name*. This cannot contain certain reserved words such as `Instagram`, `IG`, `Insta` or `Facebook`. I recommend using something like `Image Feed - ProcessWire Website`.
+5. Add a *App Contact Email* if not already populated.
+6. Click **Create App** button and complete the Security Check if required.
+7. You will be prompted to *Add a Product*. Find *Instagram Basic Display* and click **Set Up**.
 
 ### Configure the Facebook App
 You should now see *Instagram* listed in *Products* in the left sidebar. Before continuing with the Basic Display setup, you need to configure the app itself.
