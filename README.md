@@ -15,7 +15,7 @@ The app you will create uses the [*User Token Generator*](https://developers.fac
 ### Create a New Facebook App
 1. Login to your account at [https://developers.facebook.com/](https://developers.facebook.com/).
 2. *My Apps > Create App*.
-3. *Select an app type* - Make sure to choose **Consumer** ! Otherwise you won't be able to choose the correct *product* (see point 7). 
+3. *Select an app type* - Make sure to choose **Consumer** ! Otherwise you won't be able to choose the correct *product* (see point 7).
 4. Give your app a *Display Name*. This cannot contain certain reserved words such as `Instagram`, `IG`, `Insta` or `Facebook`. I recommend using something like `Image Feed - ProcessWire Website`.
 5. Add a *App Contact Email* if not already populated.
 6. Click **Create App** button and complete the Security Check if required.
@@ -138,13 +138,13 @@ $images = $instagram->getImages('username'); // Returns all images found in the 
 $images = $instagram->getImages('username', 8);
 
 // Render the images
-echo "<ul>" .
-	$images->each("<li>" .
-		"<a href='{href}'>" .
-			"<img src='{src}' alt='{alt}'>" .
-		"</a>" .
-	"</li>") .
-"</ul>";
+echo '<ul>' .
+	$images->each('<li>' .
+		'<a href={href}>' .
+			'<img src={src} alt="{alt}">' .
+		'</a>' .
+	'</li>') .
+'</ul>';
 ```
 
 The main image of a carousel album and "poster" of a video is also returned.
@@ -168,8 +168,8 @@ if(isset($album)) {
 	if(!$album->children) return '';
 	echo '<ul>' .
 		$album->children->each('<li>' .
-			'<a href="{href}">' .
-				'<img src="{src}" alt="{alt}">' .
+			'<a href={href}>' .
+				'<img src={src} alt="{alt}">' .
 			'</a>' .
 		'</li>') .
 	'</ul>';
@@ -206,8 +206,8 @@ if($albums->count()) {
 			return '<li>' .
 				'<ul>' .
 					$album->children->each('<li>' .
-						'<a href="{href}">' .
-							'<img src="{src}" alt="{alt}">' .
+						'<a href={href}>' .
+							'<img src={src} alt="{alt}">' .
 						'</a>' .
 					'</li>') .
 				'</ul>' .
@@ -236,9 +236,9 @@ $video = $instagram->getVideo('username');
 if(isset($video)) {
 
 	echo '<video ' .
-		"src='$video->src' " .
-		"poster='$video->poster' " .
-		'type="video/mp4" ' .
+		"src=$video->src " .
+		"poster=$video->poster " .
+		'type=video/mp4 ' .
 		'controls ' .
 		'playsinline' .
 	'></video>';
@@ -297,10 +297,10 @@ The following example demonstrates how this can be used to create a multi-media 
 // Function for rendering items
 function renderInstagramItem($src, $alt, $href = null) {
 	if(is_null($href)) $href = $src;
-	return "<a href='$href' data-caption='$alt' class='uk-display-block uk-cover-container'" . ($src !== $href ? " data-poster='$src'" : '') . ">" .
-		"<canvas width='640' height='640'></canvas>" .
-		"<img src='$src' alt='$alt' data-uk-img data-uk-cover>" .
-	"</a>";
+	return "<a href=$href data-caption='$alt' class='uk-display-block uk-cover-container'" . ($src !== $href ? " data-poster=$src" : '') . ">" .
+		'<canvas width=640 height=640></canvas>' .
+		"<img src=$src alt='$alt' data-uk-img data-uk-cover>" .
+	'</a>';
 }
 
 // Get the module
@@ -320,9 +320,9 @@ foreach($instagram->getMedia(16) as $item) {
 				$out = '';
 				$i = 0;
 				foreach($item->children as $child) {
-					$out .= "<div" . ($i++ < 4 ? '' : " class='uk-hidden'") . ">" . // Hides items after the 4th one
+					$out .= '<div' . ($i++ < 4 ? '' : ' class="uk-hidden"') . '>' . // Hides items after the 4th one
 						renderInstagramItem($child->src, $item->alt) .
-					"</div>";
+					'</div>';
 				}
 				$items[] = "<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>$out</div>";
 				break;
@@ -334,11 +334,11 @@ foreach($instagram->getMedia(16) as $item) {
 }
 
 // Render the items as a grid
-echo "<div class='uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l' data-uk-grid data-uk-lightbox>";
+echo '<div class="uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l" data-uk-grid data-uk-lightbox>';
 foreach($items as $item) {
 	echo "<div>$item</div>";
 }
-echo "</div>";
+echo '</div>';
 ```
 
 ## Pagination
@@ -354,124 +354,116 @@ if($config->ajax) {
 	die();
 }
 
-echo "<div id='instagram' class='uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l' data-uk-grid data-uk-lightbox data-uk-scrollspy='" . json_encode([
-	'target' => '> div',
-	'cls' => 'uk-animation-slide-bottom-small',
-	'delay' => 128,
-]) . "'></div>";
+echo '<div id=instagram class="uk-grid-small uk-child-width-1-2 uk-child-width-1-3@s uk-child-width-1-4@l" data-uk-grid data-uk-lightbox data-uk-scrollspy="target: > div; cls: uk-animation-slide-bottom-small; delay: 128;"></div>";
 
 ```
 
 #### Javascript
 ```javascript
-var instagram = {
+const instagram = {
 
 	$el: {}, // Where the items go
 	$loading: {}, // The loading spinner
 	total: 0, // The total number of items
 
-	init: function() {
+	init: () => {
 
-		this.$el = UIkit.util.$("#instagram");
-		if(!this.$el) return;
+		instagram.$el = UIkit.util.$('#instagram');
+		if (!instagram.$el) return;
 
 		// Add the spinner
-		UIkit.util.after(this.$el, "<div id='instagram-loading' class='uk-text-center uk-margin-top uk-hidden'><span data-uk-spinner></span></div>");
-		this.$loading = UIkit.util.$("#instagram-loading");
+		UIkit.util.after(instagram.$el, '<div id=instagram-loading class="uk-text-center uk-margin-top uk-hidden"><span data-uk-spinner></span></div>');
+		instagram.$loading = UIkit.util.$('#instagram-loading');
 
 		// Get the first batch of items
-		this.get();
+		instagram.get();
 	},
 
 	get: function() {
 
-		var this$1 = this;
-
 		// Show spinner
-		UIkit.util.removeClass(this$1.$loading, "uk-hidden");
+		UIkit.util.removeClass(instagram.$loading, 'uk-hidden');
 
 		// Request
 		UIkit.util.ajax(window.location.href, {
-			method: "GET",
-			headers: {"X-Requested-With": "XMLHttpRequest"},
-			responseType: "json"
-		}).then(function(xhr) {
+			method: 'GET',
+			headers: {'X-Requested-With': 'XMLHttpRequest'},
+			responseType: 'json'
+		}).then(
+			xhr => {
 
-			// Hide spinner
-			UIkit.util.addClass(this$1.$loading, "uk-hidden");
+				// Hide spinner
+				UIkit.util.addClass(instagram.$loading, 'uk-hidden');
 
-			var data = xhr.response;
-			if(!UIkit.util.isArray(data) || !data.length) return; // If no items do not render
+				const data = xhr.response;
+				if (!UIkit.util.isArray(data) || !data.length) return; // If no items do not render
 
-			var items = [];
-			data.forEach(function(item) {
+				const items = [];
+				data.forEach(item => {
 
-				switch(item.type) {
-					case "VIDEO":
-						items.push(this$1.renderItem(item.poster, item.alt, item.src));
-						break;
-					case "CAROUSEL_ALBUM":
-						// If 4 or greater items, display a grid of the first 4 images with the rest hidden
-						// Otherwise display the main image (no break, moves to default)
-						if(item.children.length >= 4) {
-							var out = "";
-							for(var i = 0; i < item.children.length; i++) {
-								out += "<div" + (i < 4 ? "" : " class='uk-hidden'") + ">" +
-									this$1.renderItem(item.children[i].src, item.alt) +
-								"</div>";
-							}
-							items.push("<div class='uk-grid-collapse uk-child-width-1-2' data-uk-grid>" + out + "</div>");
+					switch (item.type) {
+						case 'VIDEO':
+							items.push(instagram.renderItem(item.poster, item.alt, item.src));
 							break;
-						}
-					default: // IMAGE
-						items.push(this$1.renderItem(item.src, item.alt));
-						break;
+						case 'CAROUSEL_ALBUM':
+							// If 4 or greater items, display a grid of the first 4 images with the rest hidden
+							// Otherwise display the main image (no break, moves to default)
+							if (item.children.length >= 4) {
+								let out = '';
+								for (let i = 0; i < item.children.length; i++) {
+									out += `<div${i < 4 ? '' : ' class=uk-hidden'}>
+										${instagram.renderItem(item.children[i].src, item.alt)}
+									</div>`;
+								}
+								items.push(`<div class="uk-grid-collapse uk-child-width-1-2" data-uk-grid>${out}</div>`);
+								break;
+							}
+						default: // IMAGE
+							items.push(instagram.renderItem(item.src, item.alt));
+							break;
+					}
+				});
+
+				const count = items.length;
+				if (count) {
+
+					// Wrap all items with a div
+					let out = '';
+					for (let i = 0; i < count; i++) {
+						out += `<div id=instagram-item-${instagram.total + i}>
+							${items[i]}
+						</div>`;
+					}
+
+					// Append items to the container
+					UIkit.util.append(instagram.$el, out);
+
+					// Attach scrollspy listener on last item of second last row
+					if (count > 5) {
+						UIkit.util.on(`#instagram-item-${instagram.total + count - 6}`, 'inview', () => instagram.get());
+					}
+
+					// Update total
+					instagram.total = instagram.total + count;
 				}
-			});
-
-			var count = items.length;
-			if(count) {
-
-				// Wrap all items with a div
-				var out = "";
-				for(var i = 0; i < count; i++) {
-					out += "<div id='instagram-item-" + (this$1.total + i) + "'>" +
-						items[i] +
-					"</div>";
-				}
-
-				// Append items to the container
-				UIkit.util.append(this$1.$el, out);
-
-				// Attach scrollspy listener on last item of second last row
-				if(count > 5) {
-					UIkit.util.on("#instagram-item-" + (this$1.total + count - 6), "inview", function(e) {
-						this$1.get();
-					});
-				}
-
-				// Update total
-				this$1.total = this$1.total + count;
+			},
+			e => {
+				UIkit.util.addClass(instagram.$loading, 'uk-hidden');
+				console.log(e); // ERROR
 			}
-		}, function(e) {
-			UIkit.util.addClass(this$1.$loading, "uk-hidden");
-			console.log(e); // ERROR
-		})
+		);
 	},
 
-	renderItem: function(src, alt, href) {
-		if(href === void 0) href = src;
-		return "<a href='" + href + "' data-caption='" + alt + "' class='uk-display-block uk-cover-container'" +
-			(src !== href ? " data-poster='" + src + "'" : "") + ">" +
-			"<canvas width='640' height='640'></canvas>" +
-			"<img src='" + src + "' alt='" + alt + "' data-uk-img data-uk-cover>" +
-		"</a>";
+	renderItem: (src, alt, href = '') => {
+		if (href === '') href = src;
+		return `<a href=${href} data-caption="${alt}" class="uk-display-block uk-cover-container"${src !== href ? ` data-poster=${src}` : ''}>
+			<canvas width=640 height=640></canvas>
+			<img src=${src} alt="${alt}" loading=lazy data-uk-cover>
+		</a>`;
 	}
 };
 
-UIkit.util.ready(function() {
-	instagram.init();
-});
+UIkit.util.ready(() => instagram.init());
 ```
 The javascript example uses [UIkit's Javascript Utilities](https://github.com/uikit/uikit-site/blob/feature/js-utils/docs/pages/javascript-utilities.md) but the same effect is achievable using plain javascript or any common library like jQuery.
 
