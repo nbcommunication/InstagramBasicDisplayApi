@@ -1,7 +1,7 @@
 /**
  * Instagram Basic Display API Config JS
  *
- * @copyright 2021 NB Communication Ltd
+ * @copyright 2022 NB Communication Ltd
  * @license Mozilla Public License v2.0 http://mozilla.org/MPL/2.0/
  *
  */
