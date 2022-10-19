@@ -1,9 +1,20 @@
 # Changelog
 
+## 1.4.4 (October 19, 2022)
+
+### Fixed
+- `filterMedia()` now returning the video poster for the IMAGE type as it should.
+
+### Changed
+- Minor refactoring to reflect recent PW conventions, shouldn't impact any functionality.
+- Javascript example in README updated to reflect current JS standards.
+
+
 ## 1.4.3 (September 2, 2021)
 
 ### Fixed
 - Added unicode flag to preg_match_all to allow special characters in `tags`.
+
 
 ## 1.4.0 (June 27, 2020)
 
