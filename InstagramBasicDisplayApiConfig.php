@@ -28,10 +28,10 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 	 */
 	public function getInputfields() {
 
-		$config = $this->wire('config');
-		$input = $this->wire('input');
-		$modules = $this->wire('modules');
-		$sanitizer = $this->wire('sanitizer');
+		$config = $this->wire()->config;
+		$input = $this->wire()->input;
+		$modules = $this->wire()->modules;
+		$sanitizer = $this->wire()->sanitizer;
 		$inputfields = parent::getInputfields();
 
 		// Get the module
@@ -67,9 +67,9 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 
 		} else if($input->post('clearCache')) {
 			// Clear the Cache
-			$this->wire('cache')->deleteFor($instagram);
+			$this->wire()->cache->deleteFor($instagram);
 			$this->message($this->_('Cache cleared'));
-			$this->wire('session')->redirect($input->url(true));
+			$this->wire()->session->redirect($input->url(true));
 		}
 
 		// Add assets
@@ -114,7 +114,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 
 		if(count($accounts)) {
 
-			$datetime = $this->wire('datetime');
+			$datetime = $this->wire()->datetime;
 
 			$table = $modules->get('MarkupAdminDataTable');
 			$table->setEncodeEntities(false);
@@ -147,7 +147,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 
 				$renews = strtotime($account['token_renews']);
 				$table->row([
-					"<a href='https://www.instagram.com/$username' target='_blank' rel='noopener noreferrer'>$username</a>",
+					"<a href=https://www.instagram.com/$username target=_blank rel='noopener noreferrer'>$username</a>",
 					//$account['account_type'],
 					$account['user_id'],
 					$account['media_count'],
@@ -177,7 +177,7 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 		}
 
 		// Cache Time
-		$query = $this->wire('database')->prepare('SELECT name FROM caches WHERE name LIKE :name');
+		$query = $this->wire()->database->prepare('SELECT name FROM caches WHERE name LIKE :name');
 		$query->bindValue(':name', "{$instagram->className}__%");
 		$query->execute();
 		$numCaches = $query->rowCount();
