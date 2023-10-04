@@ -27,7 +27,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	public static function getModuleInfo() {
 		return [
 			'title' => 'Instagram Basic Display API',
-			'version' => 144,
+			'version' => 145,
 			'summary' => "Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			'author' => 'nbcommunication',
 			'href' => 'https://github.com/nbcommunication/InstagramBasicDisplayApi',
@@ -480,7 +480,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 						}
 					}
 
-					if($json) $data = json_encode($data);
+					if($json) $data = json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE);
 				}
 
 			} else {
@@ -1309,7 +1309,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	 *
 	 */
 	protected function logError($message, array $data = []) {
-		if(count($data)) $message .= ': ' . json_encode($data);
+		if(count($data)) $message .= ': ' . json_encode($data, JSON_INVALID_UTF8_SUBSTITUTE);
 		return $this->log($message);
 	}
 
