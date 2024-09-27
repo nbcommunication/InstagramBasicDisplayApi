@@ -37,6 +37,8 @@ class InstagramBasicDisplayApiConfig extends ModuleConfig {
 		// Get the module
 		$instagram = $modules->get(str_replace('Config', '', $this->className));
 
+		$instagram->error('Meta disabled the Instagram Basic Display API on December 4th, 2024 and this module will no longer function. To continue to display Instagram media on your site, please install InstagramMediaDisplay - https://processwire.com/modules/instagram-media-display/.');
+
 		if($input->post('_addUsername') && $input->post('_addToken')) {
 
 			// Add user
