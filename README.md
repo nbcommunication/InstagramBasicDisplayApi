@@ -1,4 +1,7 @@
 # Instagram Basic Display API
+
+**Meta disabled the Instagram Basic Display API on December 4th, 2024 and this module will no longer function. To continue to display Instagram media on your site, please install [InstagramMediaDisplay](https://processwire.com/modules/instagram-media-display/).**
+
 Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.
 
 ## Requirements
