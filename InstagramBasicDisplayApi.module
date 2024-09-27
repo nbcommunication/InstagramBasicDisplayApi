@@ -27,7 +27,7 @@ class InstagramBasicDisplayApi extends WireData implements Module, ConfigurableM
 	public static function getModuleInfo() {
 		return [
 			'title' => 'Instagram Basic Display API',
-			'version' => 145,
+			'version' => 146,
 			'summary' => "Instagram Basic Display API is an HTTP-based API that Facebook apps can use to get an Instagram user's profile, images, videos, and albums. This module provides an easy way to access that data.",
 			'author' => 'nbcommunication',
 			'href' => 'https://github.com/nbcommunication/InstagramBasicDisplayApi',
